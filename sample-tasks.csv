@@ -1,0 +1,58 @@
+title,startDate,endDate,progress,parentId
+Project Kickoff,2026-09-01,2026-09-03,10,
+Requirements Gathering,2026-09-02,2026-09-10,20,Project Kickoff
+Requirements Review,2026-09-11,2026-09-15,35,Requirements Gathering
+Architecture Design,2026-09-16,2026-09-25,45,Requirements Review
+Frontend Prototype,2026-09-20,2026-09-30,50,Architecture Design
+Backend API Design,2026-09-22,2026-10-02,55,Architecture Design
+Database Schema,2026-09-24,2026-10-05,60,Backend API Design
+UI Wireframes,2026-09-26,2026-10-07,65,Frontend Prototype
+Component Library,2026-10-01,2026-10-12,70,UI Wireframes
+Authentication Flow,2026-10-03,2026-10-15,75,Backend API Design
+Integration Planning,2026-10-04,2026-10-14,80,Database Schema
+Feature Development Sprint 1,2026-10-08,2026-10-18,85,Component Library
+Feature Development Sprint 2,2026-10-10,2026-10-24,90,Authentication Flow
+Feature Development Sprint 3,2026-10-15,2026-10-31,95,Integration Planning
+Test Case Creation,2026-10-16,2026-10-26,40,Feature Development Sprint 1
+Regression Testing,2026-10-20,2026-11-01,55,Feature Development Sprint 2
+Bug Fixing,2026-10-25,2026-11-04,60,Feature Development Sprint 3
+Accessibility Review,2026-10-27,2026-11-06,65,Test Case Creation
+Performance Tuning,2026-10-29,2026-11-08,70,Regression Testing
+Security Review,2026-11-02,2026-11-12,75,Bug Fixing
+Documentation Draft,2026-11-03,2026-11-13,80,Accessibility Review
+Stakeholder Demo Prep,2026-11-05,2026-11-16,85,Performance Tuning
+Pilot Release,2026-11-09,2026-11-18,90,Security Review
+User Feedback Collection,2026-11-12,2026-11-22,55,Stakeholder Demo Prep
+Production Readiness Check,2026-11-16,2026-11-27,60,Pilot Release
+Go-Live Planning,2026-11-20,2026-12-02,70,User Feedback Collection
+Release Candidate Build,2026-11-24,2026-12-06,80,Production Readiness Check
+Release Validation,2026-11-28,2026-12-10,85,Go-Live Planning
+Post-Release Monitoring,2026-12-01,2026-12-15,90,Release Candidate Build
+Operations Handoff,2026-12-02,2026-12-18,95,Release Validation
+Support Readiness,2026-12-05,2026-12-21,50,Post-Release Monitoring
+Roadmap Planning,2026-12-08,2026-12-27,60,Operations Handoff
+Next Quarter Forecast,2026-12-12,2027-01-05,70,Support Readiness
+Q1 Capacity Planning,2026-12-15,2027-01-10,75,Roadmap Planning
+January Retrospective,2027-01-01,2027-01-12,40,Next Quarter Forecast
+Sprint Planning January,2027-01-05,2027-01-18,45,Q1 Capacity Planning
+Dependency Mapping,2027-01-08,2027-01-20,50,January Retrospective
+Team Onboarding,2027-01-10,2027-01-24,55,Sprint Planning January
+Discovery Workshops,2027-01-12,2027-01-25,60,Dependency Mapping
+Migration Assessment,2027-01-14,2027-02-02,65,Team Onboarding
+Vendor Coordination,2027-01-18,2027-02-05,70,Discovery Workshops
+Analytics Setup,2027-01-22,2027-02-08,75,Migration Assessment
+Data Cleanup,2027-01-25,2027-02-10,80,Vendor Coordination
+Automation Baseline,2027-01-28,2027-02-15,85,Analytics Setup
+Reporting Refresh,2027-02-01,2027-02-17,90,Data Cleanup
+Platform Upgrade Prep,2027-02-03,2027-02-16,95,Automation Baseline
+Resourcing Review,2027-02-06,2027-02-20,40,Reporting Refresh
+Change Management,2027-02-09,2027-02-26,45,Platform Upgrade Prep
+Training Material Update,2027-02-11,2027-02-28,50,Resourcing Review
+Infrastructure Refresh,2027-02-14,2027-03-04,55,Change Management
+Customer Communication,2027-02-18,2027-03-08,60,Training Material Update
+Adoption Tracking,2027-02-21,2027-03-12,65,Infrastructure Refresh
+Operational Readiness,2027-02-24,2027-03-18,70,Customer Communication
+Maintenance Window Prep,2027-02-27,2027-03-20,75,Adoption Tracking
+Quarterly Review,2027-03-01,2027-03-22,80,Operational Readiness
+Phase Closure,2027-03-04,2027-03-25,85,Maintenance Window Prep
+Success Metrics,2027-03-08,2027-03-29,90,Quarterly Review
