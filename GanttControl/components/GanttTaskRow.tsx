@@ -122,7 +122,7 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
                     </Text>
                 </div>
 
-                {!isDetailed && (
+                {!isDetailed && showProgress && (
                     // Compact drops the date columns, but progress is worth
                     // keeping as a bare percentage.
                     <div
@@ -162,24 +162,26 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
                         >
                             {shortDate(end)}
                         </div>
-                        <div
-                            role="gridcell"
-                            className={mergeClasses(
-                                styles.listCell,
-                                "gantt-list-cell",
-                                styles.listCellProgress,
-                                isSelected && styles.listCellSelected
-                            )}
-                        >
-                            <ProgressBar
-                                value={progress / 100}
-                                thickness="medium"
-                                color={progress >= 100 ? "success" : status === "overdue" ? "error" : "brand"}
-                            />
-                            <Text size={100} style={{ color: tokens.colorNeutralForeground3, minWidth: "28px" }}>
-                                {`${progress}%`}
-                            </Text>
-                        </div>
+                        {showProgress && (
+                            <div
+                                role="gridcell"
+                                className={mergeClasses(
+                                    styles.listCell,
+                                    "gantt-list-cell",
+                                    styles.listCellProgress,
+                                    isSelected && styles.listCellSelected
+                                )}
+                            >
+                                <ProgressBar
+                                    value={progress / 100}
+                                    thickness="medium"
+                                    color={progress >= 100 ? "success" : status === "overdue" ? "error" : "brand"}
+                                />
+                                <Text size={100} style={{ color: tokens.colorNeutralForeground3, minWidth: "28px" }}>
+                                    {`${progress}%`}
+                                </Text>
+                            </div>
+                        )}
                     </>
                 )}
             </div>

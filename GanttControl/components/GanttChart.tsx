@@ -126,13 +126,22 @@ export const GanttChart: React.FC<GanttChartProps> = ({
 
     const rowHeight = ROW_HEIGHT[density];
     const isDetailed = density === "comfortable";
-    const minListWidth = MIN_LIST_WIDTH[density];
+    const progressColumnWidth = showProgress
+        ? isDetailed
+            ? LIST_COLUMN_WIDTHS.progress
+            : LIST_COLUMN_WIDTHS.progressCompact
+        : 0;
+    const minListWidth = Math.max(
+        MIN_LIST_WIDTH[density] -
+            (showProgress ? 0 : isDetailed ? LIST_COLUMN_WIDTHS.progress : LIST_COLUMN_WIDTHS.progressCompact),
+        0
+    );
 
     // Switching into detailed mode from a narrow compact pane would hide the
     // task name behind the extra columns, so widen to that mode's floor.
     React.useEffect(() => {
-        setListWidth((current) => Math.max(MIN_LIST_WIDTH[density], current));
-    }, [density]);
+        setListWidth((current) => Math.max(minListWidth, current));
+    }, [density, minListWidth]);
 
     // Derived from every task, not just the visible rows, so that collapse-all
     // still reaches parents whose own parent is already collapsed.
@@ -143,9 +152,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
      * of its column, so indentation stops once the name is down to its minimum
      * legible width. Widening the splitter buys back indentation depth.
      */
-    const trailingColumns = isDetailed
-        ? LIST_COLUMN_WIDTHS.date * 2 + LIST_COLUMN_WIDTHS.progress
-        : LIST_COLUMN_WIDTHS.progressCompact;
+    const trailingColumns = isDetailed ? LIST_COLUMN_WIDTHS.date * 2 + progressColumnWidth : progressColumnWidth;
     const maxIndent = Math.max(0, listWidth - trailingColumns - NAME_CELL_CHROME - MIN_NAME_TEXT_WIDTH);
 
     /** Splitter ---------------------------------------------------------- */
@@ -383,9 +390,9 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                                 ? "A field setting doesn't match any column"
                                 : "Some field settings don't match any column"}
                         </MessageBarTitle>
-                        {unmatchedFields.map((item) => `${item.setting} "${item.field}"`).join(", ")}.{" "}
-                        Columns received: {availableColumns.join(", ")}. In a canvas app, add the column under Fields,
-                        or for a related value such as resource.name add it to Items with AddColumns.
+                        {unmatchedFields.map((item) => `${item.setting} "${item.field}"`).join(", ")}. Columns received:{" "}
+                        {availableColumns.join(", ")}. In a canvas app, add the column under Fields, or for a related
+                        value such as resource.name add it to Items with AddColumns.
                     </MessageBarBody>
                     <MessageBarActions
                         containerAction={
@@ -410,7 +417,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                             >
                                 Task
                             </div>
-                            {!isDetailed && (
+                            {!isDetailed && showProgress && (
                                 <div
                                     role="columnheader"
                                     className={mergeClasses(
@@ -444,16 +451,18 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                                     >
                                         Finish
                                     </div>
-                                    <div
-                                        role="columnheader"
-                                        className={mergeClasses(
-                                            styles.listCell,
-                                            styles.listCellProgress,
-                                            styles.headerCellText
-                                        )}
-                                    >
-                                        Progress
-                                    </div>
+                                    {showProgress && (
+                                        <div
+                                            role="columnheader"
+                                            className={mergeClasses(
+                                                styles.listCell,
+                                                styles.listCellProgress,
+                                                styles.headerCellText
+                                            )}
+                                        >
+                                            Progress
+                                        </div>
+                                    )}
                                 </>
                             )}
                             <div

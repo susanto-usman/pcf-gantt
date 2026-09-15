@@ -126,20 +126,27 @@ export const GanttBar: React.FC<GanttBarProps> = ({
                     <span>{task.category}</span>
                 </div>
             )}
-            <ProgressBar value={progress / 100} thickness="large" />
-            <div className={styles.tooltipRow}>
-                <span className={styles.tooltipLabel}>{isSummary ? "Rolled-up progress" : "Progress"}</span>
-                <span>{`${progress}%`}</span>
-            </div>
+            {showProgress && (
+                <>
+                    <div className={styles.tooltipRow}>
+                        <ProgressBar value={progress / 100} thickness="large" />
+                    </div>
+
+                    <div className={styles.tooltipRow}>
+                        <span className={styles.tooltipLabel}>{isSummary ? "Rolled-up progress" : "Progress"}</span>
+                        <span>{`${progress}%`}</span>
+                    </div>
+                </>
+            )}
         </div>
     );
 
     const shared = {
         role: "button" as const,
         tabIndex: -1,
-        "aria-label": `${rowLabel ? `${rowLabel}, ` : ""}${task.title}. ${formatDate(start)} to ${formatDate(end)}. ${progress} percent complete. ${
-            STATUS_LABELS[status]
-        }.`,
+        "aria-label": `${rowLabel ? `${rowLabel}, ` : ""}${task.title}. ${formatDate(start)} to ${formatDate(end)}.${
+            showProgress ? ` ${progress} percent complete.` : ""
+        } ${STATUS_LABELS[status]}.`,
         onClick: (event: React.MouseEvent) => {
             event.stopPropagation();
             onSelect(task.id);
