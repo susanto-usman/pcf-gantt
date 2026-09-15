@@ -46,6 +46,21 @@ const MAX_LIST_WIDTH = 640;
 const LEGEND_STATUSES: TaskStatus[] = ["onTrack", "atRisk", "overdue", "complete", "notStarted"];
 /** Rows rendered above and below the viewport so scrolling stays smooth. */
 const OVERSCAN = 8;
+const BOUNDARY_DEBOUNCE_MS = 500;
+/** Ten years; a longer boundary is treated as a typo rather than drawn. */
+const MAX_BOUNDARY_SPAN_MS = 3653 * 86400000;
+
+/** Follows value, but only once it has stopped changing for delayMs. */
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+    const [debounced, setDebounced] = React.useState(value);
+
+    React.useEffect(() => {
+        const timeoutId = window.setTimeout(() => setDebounced(value), delayMs);
+        return () => window.clearTimeout(timeoutId);
+    }, [value, delayMs]);
+
+    return debounced;
+}
 
 export const GanttChart: React.FC<GanttChartProps> = ({
     tasks,
@@ -66,6 +81,8 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     onSelect,
     onOpen,
     onLoadMore,
+    start,
+    end,
 }) => {
     const styles = useGanttStyles();
     // Held in state rather than a ref: the scroll area is absent from the
@@ -119,10 +136,25 @@ export const GanttChart: React.FC<GanttChartProps> = ({
 
     const rows = React.useMemo(() => buildRows(filteredTasks, collapsedIds), [filteredTasks, collapsedIds]);
 
+    // Canvas pushes every keystroke of a bound input through, so wait for the
+    // boundary to settle rather than rebuilding the timeline per character.
+    const boundaryStart = useDebouncedValue(start, BOUNDARY_DEBOUNCE_MS);
+    const boundaryEnd = useDebouncedValue(end, BOUNDARY_DEBOUNCE_MS);
+
     const timeline = React.useMemo(() => {
         const extent = getTaskExtent(filteredTasks);
-        return buildTimeline(extent.start, extent.end, timeScale, density, today);
-    }, [filteredTasks, timeScale, density, today]);
+        let rangeStart = boundaryStart ?? extent.start.getTime();
+        let rangeEnd = boundaryEnd ?? extent.end.getTime();
+
+        // A half-typed year (e.g. 202) would otherwise render centuries of day
+        // columns, so an inverted or implausibly long range falls back to the tasks.
+        if (rangeStart > rangeEnd || rangeEnd - rangeStart > MAX_BOUNDARY_SPAN_MS) {
+            rangeStart = extent.start.getTime();
+            rangeEnd = extent.end.getTime();
+        }
+
+        return buildTimeline(new Date(rangeStart), new Date(rangeEnd), timeScale, density, today);
+    }, [filteredTasks, timeScale, density, today, boundaryStart, boundaryEnd]);
 
     const rowHeight = ROW_HEIGHT[density];
     const isDetailed = density === "comfortable";

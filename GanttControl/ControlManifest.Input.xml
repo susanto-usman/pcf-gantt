@@ -5,6 +5,9 @@
 
     <data-set name="tasks" display-name-key="Tasks" cds-data-set-options="displayCommandBar:true;displayViewSelector:true;displayQuickFind:true" />
 
+    <property name="start" display-name-key="Start" description-key="start of the gantt chart boundary, leave blank to use the earliest task date" of-type="DateAndTime.DateOnly" usage="input" required="false" />
+    <property name="end" display-name-key="End" description-key="end of the gantt chart boundary, leave blank to use the latest task date" of-type="DateAndTime.DateOnly" usage="input" required="false" />
+
     <property name="titleField" display-name-key="Title field" description-key="Field name used for the task title. Use lookup.column (e.g. resource.name) for a column on a related table; this works in every field setting." of-type="SingleLine.Text" usage="input" required="false" default-value="title" />
     <property name="startField" display-name-key="Start field" description-key="Field name used for the task start date." of-type="SingleLine.Text" usage="input" required="false" default-value="startDate" />
     <property name="endField" display-name-key="End field" description-key="Field name used for the task end date." of-type="SingleLine.Text" usage="input" required="false" default-value="endDate" />

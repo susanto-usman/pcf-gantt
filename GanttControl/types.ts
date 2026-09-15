@@ -85,4 +85,8 @@ export interface GanttChartProps {
     onSelect: (taskId: string) => void;
     onOpen: (taskId: string) => void;
     onLoadMore: () => void;
+    /** Timeline boundary as a timestamp; undefined falls back to the earliest task start. */
+    start?: number;
+    /** Timeline boundary as a timestamp; undefined falls back to the latest task end. */
+    end?: number;
 }
