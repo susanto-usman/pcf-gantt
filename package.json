@@ -12,7 +12,9 @@
     "start:watch": "pcf-scripts start watch",
     "refreshTypes": "pcf-scripts refreshTypes",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.1",
@@ -30,6 +32,7 @@
     "react": "^16.14.0",
     "react-dom": "^16.14.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "8.44.0"
+    "typescript-eslint": "8.44.0",
+    "vitest": "^3.2.7"
   }
 }

@@ -67,6 +67,8 @@ function toText(value: unknown): string | null {
     return text.length > 0 ? text : null;
 }
 
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
 const DENSITIES: Density[] = ["comfortable", "compact"];
 const TIME_SCALES: TimeScale[] = ["day", "week", "month"];
 
@@ -376,7 +378,15 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             return null;
         }
 
-        const date = value instanceof Date ? new Date(value) : new Date(value as string | number);
+        // A date-only string ("2024-01-01") parses as UTC midnight, which is the
+        // previous local day west of UTC, so read it as a local date instead.
+        const dateOnly = typeof value === "string" ? DATE_ONLY.exec(value.trim()) : null;
+        const date =
+            value instanceof Date
+                ? new Date(value)
+                : dateOnly
+                  ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+                  : new Date(value as string | number);
 
         if (Number.isNaN(date.getTime())) {
             return null;

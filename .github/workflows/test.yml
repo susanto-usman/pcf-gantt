@@ -1,0 +1,51 @@
+name: Test
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+    workflow_dispatch:
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                # Dates are laid out in local time, so run in zones either side of UTC,
+                # plus Perth, where the control's users are.
+                tz: [UTC, America/New_York, Pacific/Auckland, Australia/Perth]
+        name: test (${{ matrix.tz }})
+        env:
+            TZ: ${{ matrix.tz }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+
+            - run: npm ci
+
+            - run: npm test
+
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+
+            - run: npm ci
+
+            - run: npm run lint
+
+            - run: npm run build
