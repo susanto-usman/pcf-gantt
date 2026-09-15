@@ -1,0 +1,212 @@
+import {
+    mergeClasses,
+    PositioningImperativeRef,
+    PositioningVirtualElement,
+    ProgressBar,
+    Text,
+    tokens,
+    Tooltip,
+} from "@fluentui/react-components";
+import * as React from "react";
+import { STATUS_LABELS, STATUS_TOKENS, useGanttStyles } from "../styles";
+import { GanttTask } from "../types";
+import { diffInDays, formatDate, TaskStatus } from "../utils";
+
+export interface BarLayout {
+    left: number;
+    width: number;
+    start: Date;
+    end: Date;
+    progress: number;
+    status: TaskStatus;
+    isMilestone: boolean;
+}
+
+export interface GanttBarProps {
+    task: GanttTask;
+    layout: BarLayout;
+    /** Draws the rolled-up bracket used for parent rows. */
+    isSummary: boolean;
+    /** Label of the merged row a segment belongs to, shown in its tooltip. */
+    rowLabel?: string;
+    isSelected: boolean;
+    showProgress: boolean;
+    onSelect: (taskId: string) => void;
+    onOpen: (taskId: string) => void;
+}
+
+export const GanttBar: React.FC<GanttBarProps> = ({
+    task,
+    layout,
+    isSummary,
+    rowLabel,
+    isSelected,
+    showProgress,
+    onSelect,
+    onOpen,
+}) => {
+    const styles = useGanttStyles();
+    const { left, width, start, end, progress, status, isMilestone } = layout;
+    const palette = STATUS_TOKENS[status];
+
+    /**
+     * Bars can span the whole timeline — a summary bar is often thousands of
+     * pixels wide — so anchoring the tooltip to the element puts it nowhere
+     * near the cursor. Point it at a zero-size virtual element that tracks the
+     * pointer instead.
+     *
+     * The element is stable and reads from a ref, so following the pointer
+     * costs a positioning update rather than a React render per mouse move.
+     */
+    const pointer = React.useRef({ x: 0, y: 0 });
+    const positioningRef = React.useRef<PositioningImperativeRef>(null);
+    const frame = React.useRef(0);
+
+    const virtualTarget = React.useMemo<PositioningVirtualElement>(
+        () => ({
+            getBoundingClientRect: () => {
+                const { x, y } = pointer.current;
+                return { x, y, top: y, bottom: y, left: x, right: x, width: 0, height: 0 };
+            },
+        }),
+        []
+    );
+
+    React.useEffect(() => () => cancelAnimationFrame(frame.current), []);
+
+    const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+        pointer.current = { x: event.clientX, y: event.clientY };
+
+        // Coalesce to one reposition per frame; pointermove can fire far faster.
+        if (frame.current === 0) {
+            frame.current = requestAnimationFrame(() => {
+                frame.current = 0;
+                positioningRef.current?.updatePosition();
+            });
+        }
+    };
+
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            onOpen(task.id);
+        } else if (event.key === " ") {
+            event.preventDefault();
+            onSelect(task.id);
+        }
+    };
+
+    const tooltip = (
+        <div className={styles.tooltipContent}>
+            <Text className={styles.tooltipTitle}>{task.title}</Text>
+            {rowLabel && (
+                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                    {rowLabel}
+                </Text>
+            )}
+            <div className={styles.tooltipRow}>
+                <span className={styles.tooltipLabel}>Start</span>
+                <span>{formatDate(start)}</span>
+            </div>
+            <div className={styles.tooltipRow}>
+                <span className={styles.tooltipLabel}>Finish</span>
+                <span>{formatDate(end)}</span>
+            </div>
+            <div className={styles.tooltipRow}>
+                <span className={styles.tooltipLabel}>Duration</span>
+                <span>{formatDuration(diffInDays(start, end) + 1)}</span>
+            </div>
+            <div className={styles.tooltipRow}>
+                <span className={styles.tooltipLabel}>Status</span>
+                <span style={{ color: palette.text }}>{STATUS_LABELS[status]}</span>
+            </div>
+            {task.category && (
+                <div className={styles.tooltipRow}>
+                    <span className={styles.tooltipLabel}>Category</span>
+                    <span>{task.category}</span>
+                </div>
+            )}
+            <ProgressBar value={progress / 100} thickness="large" />
+            <div className={styles.tooltipRow}>
+                <span className={styles.tooltipLabel}>{isSummary ? "Rolled-up progress" : "Progress"}</span>
+                <span>{`${progress}%`}</span>
+            </div>
+        </div>
+    );
+
+    const shared = {
+        role: "button" as const,
+        tabIndex: -1,
+        "aria-label": `${rowLabel ? `${rowLabel}, ` : ""}${task.title}. ${formatDate(start)} to ${formatDate(end)}. ${progress} percent complete. ${
+            STATUS_LABELS[status]
+        }.`,
+        onClick: (event: React.MouseEvent) => {
+            event.stopPropagation();
+            onSelect(task.id);
+        },
+        onDoubleClick: (event: React.MouseEvent) => {
+            event.stopPropagation();
+            onOpen(task.id);
+        },
+        onKeyDown: handleKeyDown,
+        onPointerMove: handlePointerMove,
+    };
+
+    // Sits just clear of the cursor so the surface never lands under it.
+    const tooltipProps = {
+        content: tooltip,
+        relationship: "description" as const,
+        withArrow: true,
+        positioning: {
+            target: virtualTarget,
+            positioningRef,
+            position: "above" as const,
+            align: "center" as const,
+            offset: 14,
+        },
+    };
+
+    if (isSummary) {
+        return (
+            <Tooltip {...tooltipProps}>
+                <div {...shared} className={styles.summaryBar} style={{ left: `${left}px`, width: `${width}px` }}>
+                    <div className={styles.summaryBarShape} style={{ backgroundColor: palette.fill }} />
+                </div>
+            </Tooltip>
+        );
+    }
+
+    if (isMilestone) {
+        return (
+            <Tooltip {...tooltipProps}>
+                <div
+                    {...shared}
+                    className={styles.milestone}
+                    style={{ left: `${left + width / 2}px`, backgroundColor: palette.fill }}
+                />
+            </Tooltip>
+        );
+    }
+
+    return (
+        <Tooltip {...tooltipProps}>
+            <div
+                {...shared}
+                className={mergeClasses(styles.bar, isSelected && styles.barSelected)}
+                style={{ left: `${left}px`, width: `${width}px`, backgroundColor: palette.track }}
+            >
+                <div
+                    className={styles.barFill}
+                    style={{
+                        width: showProgress ? `${Math.max(0, Math.min(100, progress))}%` : "100%",
+                        backgroundColor: palette.fill,
+                    }}
+                />
+            </div>
+        </Tooltip>
+    );
+};
+
+function formatDuration(days: number): string {
+    return days === 1 ? "1 day" : `${days} days`;
+}

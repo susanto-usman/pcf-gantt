@@ -1,21 +1,41 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest>
-  <control namespace="Monadelphous" constructor="GanttControl" version="0.0.1" display-name-key="GanttControl" description-key="GanttControl description" control-type="standard">
+  <control namespace="Monadelphous" constructor="GanttControl" version="0.0.5" display-name-key="GanttControl" description-key="GanttControl description" control-type="virtual">
     <external-service-usage enabled="false" />
 
     <data-set name="tasks" display-name-key="Tasks" cds-data-set-options="displayCommandBar:true;displayViewSelector:true;displayQuickFind:true" />
 
-    <property name="titleField" display-name-key="Title field" description-key="Field name used for the task title." of-type="SingleLine.Text" usage="input" required="false" default-value="title" />
+    <property name="titleField" display-name-key="Title field" description-key="Field name used for the task title. Use lookup.column (e.g. resource.name) for a column on a related table; this works in every field setting." of-type="SingleLine.Text" usage="input" required="false" default-value="title" />
     <property name="startField" display-name-key="Start field" description-key="Field name used for the task start date." of-type="SingleLine.Text" usage="input" required="false" default-value="startDate" />
     <property name="endField" display-name-key="End field" description-key="Field name used for the task end date." of-type="SingleLine.Text" usage="input" required="false" default-value="endDate" />
-    <property name="progressField" display-name-key="Progress field" description-key="Field name used for task progress." of-type="SingleLine.Text" usage="input" required="false" default-value="progress" />
-    <property name="parentField" display-name-key="Parent field" description-key="Field name used for a parent task relationship." of-type="SingleLine.Text" usage="input" required="false" default-value="parentId" />
-    <property name="showCurrentTime" display-name-key="Show current time" description-key="Shows a vertical dotted line for the current date." of-type="TwoOptions" usage="input" required="false" default-value="false" />
+    <property name="progressField" display-name-key="Progress field" description-key="Field name used for task progress (0-100)." of-type="SingleLine.Text" usage="input" required="false" default-value="progress" />
+    <property name="parentField" display-name-key="Parent field" description-key="Field name used for a parent task relationship. Matched against the record id, then the task title." of-type="SingleLine.Text" usage="input" required="false" default-value="parentId" />
+    <property name="rowField" display-name-key="Row field" description-key="Optional field name. With Group rows on, records sharing the same value are drawn as separate bars on one row, labelled with that value (for example, every roster swing for an employee)." of-type="SingleLine.Text" usage="input" required="false" />
+    <property name="rowTitleField" display-name-key="Row title field" description-key="Optional field name used to label a grouped row, so rows can be grouped by one value (e.g. employee.id) and shown by another (e.g. employee.name). Falls back to the Row field value." of-type="SingleLine.Text" usage="input" required="false" />
+    <property name="categoryField" display-name-key="Category field" description-key="Optional field name used to group and colour tasks." of-type="SingleLine.Text" usage="input" required="false" />
+
+    <property name="density" display-name-key="Density" description-key="Row density of the chart." of-type="Enum" usage="input" required="false" default-value="comfortable">
+      <value name="comfortable" display-name-key="Detailed" description-key="Taller rows with start, finish and progress columns.">comfortable</value>
+      <value name="compact" display-name-key="Compact" description-key="Condensed rows that fit more tasks on screen.">compact</value>
+    </property>
+
+    <property name="timeScale" display-name-key="Time scale" description-key="Initial zoom level of the timeline." of-type="Enum" usage="input" required="false" default-value="day">
+      <value name="day" display-name-key="Day" description-key="One column per day.">day</value>
+      <value name="week" display-name-key="Week" description-key="One column per week.">week</value>
+      <value name="month" display-name-key="Month" description-key="One column per month.">month</value>
+    </property>
+
+    <property name="showToolbar" display-name-key="Show toolbar" description-key="Shows the command bar with search, density and zoom controls." of-type="TwoOptions" usage="input" required="false" default-value="true" />
+    <property name="showCurrentTime" display-name-key="Show current time" description-key="Shows a vertical marker for the current date." of-type="TwoOptions" usage="input" required="false" default-value="true" />
+    <property name="groupRows" display-name-key="Group rows" description-key="Draws records that share a Row field value as separate bars on one row. When off, every record gets its own row." of-type="TwoOptions" usage="input" required="false" default-value="true" />
+    <property name="showProgress" display-name-key="Show progress" description-key="Fills each bar in proportion to its progress value." of-type="TwoOptions" usage="input" required="false" default-value="true" />
+
     <property name="selectedTaskId" display-name-key="Selected task" description-key="The taskId that the user selected in the control." of-type="SingleLine.Text" usage="bound" required="false" />
 
     <resources>
       <code path="index.ts" order="1" />
-      <css path="css/GanttControl.css" order="1" />
+      <platform-library name="React" version="16.14.0" />
+      <platform-library name="Fluent" version="9.46.2" />
     </resources>
   </control>
 </manifest>
