@@ -167,6 +167,7 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             this.resolveField(dataset, this.readFieldName(context, propertyName, fallback));
         const unset: FieldRef = { column: "", property: null };
 
+        const idField = field("idField", "id");
         const titleField = field("titleField", "title");
         const startField = field("startField", "startDate");
         const endField = field("endField", "endDate");
@@ -194,7 +195,7 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             }
 
             tasks.push({
-                id: recordId,
+                id: this.readText(record, idField) ?? recordId,
                 title: this.readText(record, titleField) ?? "Untitled task",
                 start,
                 end: end >= start ? end : start,
@@ -272,6 +273,7 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
         }
 
         const settings: [keyof IInputs, string, string][] = [
+            ["idField", "ID field", "id"],
             ["titleField", "Title field", "title"],
             ["startField", "Start field", ""],
             ["endField", "End field", ""],
