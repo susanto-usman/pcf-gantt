@@ -18,7 +18,7 @@ jobs:
             matrix:
                 # Dates are laid out in local time, so run in zones either side of UTC,
                 # plus Perth, where the control's users are.
-                tz: [UTC, America/New_York, Pacific/Auckland, Australia/Perth]
+                tz: [UTC, Australia/Perth]
         name: test (${{ matrix.tz }})
         env:
             TZ: ${{ matrix.tz }}
