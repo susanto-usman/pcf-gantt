@@ -3,6 +3,10 @@
     "compilerOptions": {
         "typeRoots": ["node_modules/@types"],
         "types": ["node", "powerapps-component-framework"],
-        "ignoreDeprecations": "6.0"
+        // The base config targets ES5, which TypeScript 5.9 reports as deprecated.
+        // Every browser Power Apps supports handles ES2017.
+        "target": "ES2017",
+        "lib": ["ES2020", "DOM", "DOM.Iterable"],
+        "moduleResolution": "node"
     }
 }
