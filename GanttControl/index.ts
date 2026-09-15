@@ -3,6 +3,7 @@ import * as React from "react";
 import { GanttChart } from "./components/GanttChart";
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { Density, GanttTask, TimeScale } from "./types";
+import { startOfDay } from "./utils";
 
 type DatasetRecord = ComponentFramework.PropertyHelper.DataSetApi.EntityRecord;
 
@@ -125,6 +126,8 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
                     paging.loadNextPage();
                 }
             },
+            start: this.readBoundary(context.parameters.start),
+            end: this.readBoundary(context.parameters.end),
         });
 
         // fluentDesignLanguage carries the host's live theme (light, dark or
@@ -396,6 +399,22 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
         // stop timezone offsets shifting a task into the neighbouring day.
         date.setHours(0, 0, 0, 0);
         return date;
+    }
+
+    /**
+     * A timeline boundary as a local-midnight timestamp, or undefined when the
+     * property is blank. A number rather than a Date so an unchanged value
+     * compares equal across updateView calls and memoised work is kept.
+     */
+    private readBoundary(property: ComponentFramework.PropertyTypes.DateTimeProperty | undefined): number | undefined {
+        const raw = property?.raw;
+
+        if (!raw) {
+            return undefined;
+        }
+
+        const date = new Date(raw);
+        return Number.isNaN(date.getTime()) ? undefined : startOfDay(date).getTime();
     }
 
     private readNumber(record: DatasetRecord, field: FieldRef, fallback: number): number {
