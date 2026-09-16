@@ -36,6 +36,18 @@ export interface GanttRow {
     rollupProgress: number;
 }
 
+/**
+ * How a row stands in the current selection: picked by the user, holding the
+ * selected bar, or neither.
+ */
+export type RowSelection = "none" | "row" | "task";
+
+/** What the chart has selected. A row and a task are never selected together. */
+export interface GanttSelection {
+    taskId?: string;
+    rowId?: string;
+}
+
 /** One column of the timeline, in scale-dependent units (a day, a week or a month). */
 export interface TimelineTick {
     start: Date;
@@ -71,7 +83,10 @@ export interface GanttChartProps {
     unmatchedFields: { setting: string; field: string }[];
     /** The start/end column names currently configured. */
     dateFieldNames: { start: string; end: string };
+    /** The selected record; a row and a task are never selected at once. */
     selectedTaskId?: string;
+    /** The selected row: a Row field value when grouping, otherwise a task id. */
+    selectedRowId?: string;
     density: Density;
     timeScale: TimeScale;
     showToolbar: boolean;
@@ -82,7 +97,10 @@ export interface GanttChartProps {
     /** Allocated size from the host; 0 means "not constrained, fill the parent". */
     width: number;
     height: number;
-    onSelect: (taskId: string) => void;
+    /** The chart resolves the click; undefined means nothing is selected any more. */
+    onSelect: (taskId: string | undefined) => void;
+    /** Selects a whole row rather than one of the records drawn on it. */
+    onSelectRow: (rowId: string | undefined) => void;
     onOpen: (taskId: string) => void;
     onLoadMore: () => void;
     /** Timeline boundary as a timestamp; undefined falls back to the earliest task start. */

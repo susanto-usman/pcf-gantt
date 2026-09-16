@@ -31,11 +31,27 @@ const AS_OF = parseDate(process.argv[2] ?? new Date().toISOString().split("T")[0
 const EMPLOYEE_COUNT = 100;
 
 const CREWS = [
-    { name: "Mechanical", share: 25, roles: ["Mechanical Fitter", "Mechanical Fitter", "Leading Hand Fitter", "Millwright"] },
-    { name: "Electrical & Instrumentation", share: 20, roles: ["Electrician", "Electrician", "Instrument Technician", "E&I Leading Hand"] },
-    { name: "Boilermakers & Welders", share: 22, roles: ["Boilermaker", "Welder", "Coded Welder", "Leading Hand Boilermaker"] },
+    {
+        name: "Mechanical",
+        share: 25,
+        roles: ["Mechanical Fitter", "Mechanical Fitter", "Leading Hand Fitter", "Millwright"],
+    },
+    {
+        name: "Electrical & Instrumentation",
+        share: 20,
+        roles: ["Electrician", "Electrician", "Instrument Technician", "E&I Leading Hand"],
+    },
+    {
+        name: "Boilermakers & Welders",
+        share: 22,
+        roles: ["Boilermaker", "Welder", "Coded Welder", "Leading Hand Boilermaker"],
+    },
     { name: "Rigging & Scaffolding", share: 20, roles: ["Rigger", "Advanced Scaffolder", "Crane Operator", "Dogman"] },
-    { name: "Supervision & HSE", share: 13, roles: ["Site Supervisor", "HSE Advisor", "Planner", "Site Administrator"] },
+    {
+        name: "Supervision & HSE",
+        share: 13,
+        roles: ["Site Supervisor", "HSE Advisor", "Planner", "Site Administrator"],
+    },
 ];
 
 // onDays/offDays in calendar days. alternateShifts swaps day/night each swing.
@@ -48,21 +64,105 @@ const ROSTERS = [
 ];
 
 const FIRST_NAMES = [
-    "Liam", "Olivia", "Noah", "Charlotte", "Jack", "Amelia", "William", "Isla", "Oliver", "Mia",
-    "Thomas", "Ava", "James", "Grace", "Lucas", "Chloe", "Henry", "Zoe", "Ethan", "Ruby",
-    "Mason", "Sophie", "Cooper", "Harper", "Riley", "Ella", "Lachlan", "Matilda", "Hamish", "Evie",
-    "Arjun", "Priya", "Wei", "Mei", "Tane", "Aroha", "Mateo", "Lucia", "Kofi", "Amara",
-    "Declan", "Siobhan", "Nikolai", "Anya", "Darius", "Leila", "Ravi", "Anjali", "Duc", "Linh",
+    "Liam",
+    "Olivia",
+    "Noah",
+    "Charlotte",
+    "Jack",
+    "Amelia",
+    "William",
+    "Isla",
+    "Oliver",
+    "Mia",
+    "Thomas",
+    "Ava",
+    "James",
+    "Grace",
+    "Lucas",
+    "Chloe",
+    "Henry",
+    "Zoe",
+    "Ethan",
+    "Ruby",
+    "Mason",
+    "Sophie",
+    "Cooper",
+    "Harper",
+    "Riley",
+    "Ella",
+    "Lachlan",
+    "Matilda",
+    "Hamish",
+    "Evie",
+    "Arjun",
+    "Priya",
+    "Wei",
+    "Mei",
+    "Tane",
+    "Aroha",
+    "Mateo",
+    "Lucia",
+    "Kofi",
+    "Amara",
+    "Declan",
+    "Siobhan",
+    "Nikolai",
+    "Anya",
+    "Darius",
+    "Leila",
+    "Ravi",
+    "Anjali",
+    "Duc",
+    "Linh",
 ];
 
 const LAST_NAMES = [
-    "Smith", "Jones", "Williams", "Brown", "Wilson", "Taylor", "Johnson", "White", "Martin", "Anderson",
-    "Thompson", "Nguyen", "Thomas", "Walker", "Harris", "Lee", "Ryan", "Robinson", "Kelly", "King",
-    "Davis", "Wright", "Evans", "Roberts", "Green", "Hall", "Wood", "Jackson", "Clarke", "Patel",
-    "Singh", "Chen", "Wang", "Murphy", "O'Brien", "Kovac", "Rossi", "Ngata", "Mensah", "Fernandes",
+    "Smith",
+    "Jones",
+    "Williams",
+    "Brown",
+    "Wilson",
+    "Taylor",
+    "Johnson",
+    "White",
+    "Martin",
+    "Anderson",
+    "Thompson",
+    "Nguyen",
+    "Thomas",
+    "Walker",
+    "Harris",
+    "Lee",
+    "Ryan",
+    "Robinson",
+    "Kelly",
+    "King",
+    "Davis",
+    "Wright",
+    "Evans",
+    "Roberts",
+    "Green",
+    "Hall",
+    "Wood",
+    "Jackson",
+    "Clarke",
+    "Patel",
+    "Singh",
+    "Chen",
+    "Wang",
+    "Murphy",
+    "O'Brien",
+    "Kovac",
+    "Rossi",
+    "Ngata",
+    "Mensah",
+    "Fernandes",
 ];
 
 const rng = mulberry32(20260701);
+// Separate stream, so adding overlapping leave leaves the rest of the roster
+// (names, rosters, swing dates) byte-for-byte what it was.
+const leaveRng = mulberry32(20260902);
 
 const rows = [];
 const usedNames = new Set();
@@ -70,7 +170,16 @@ let employeeNumber = 1001;
 
 for (const crew of CREWS) {
     const crewTitle = `${crew.name} Crew`;
-    const crewRow = { title: crewTitle, parentId: "", category: "Crew", employee: null, role: "", crew: crew.name, roster: "", shift: "" };
+    const crewRow = {
+        title: crewTitle,
+        parentId: "",
+        category: "Crew",
+        employee: null,
+        role: "",
+        crew: crew.name,
+        roster: "",
+        shift: "",
+    };
     rows.push(crewRow);
     const crewChildren = [];
 
@@ -102,7 +211,19 @@ for (const row of rows) {
     row.endDate = formatDate(row.end);
 }
 
-const fields = ["title", "startDate", "endDate", "progress", "parentId", "category", "employee", "role", "crew", "roster", "shift"];
+const fields = [
+    "title",
+    "startDate",
+    "endDate",
+    "progress",
+    "parentId",
+    "category",
+    "employee",
+    "role",
+    "crew",
+    "roster",
+    "shift",
+];
 const outDir = dirname(fileURLToPath(import.meta.url));
 
 const records = rows.map((row) => Object.fromEntries(fields.map((field) => [field, field in row ? row[field] : ""])));
@@ -110,7 +231,11 @@ writeFileSync(join(outDir, "employee-roster.json"), JSON.stringify(records, null
 
 // CSV has no nested values, so employee is written as a JSON string in one column.
 const csvValue = (row, field) =>
-    field === "employee" ? (row.employee ? JSON.stringify({ id: row.employee.id, name: row.employee.name }) : "") : row[field];
+    field === "employee"
+        ? row.employee
+            ? JSON.stringify({ id: row.employee.id, name: row.employee.name })
+            : ""
+        : row[field];
 const csv = [fields.join(",")]
     .concat(rows.map((row) => fields.map((field) => csvCell(csvValue(row, field))).join(",")))
     .join("\r\n");
@@ -171,7 +296,53 @@ function buildAssignments(firstRoster, dayShiftOnly) {
         assignments.push(...buildSwings(period.roster, period.from, period.to, isMidCycle, dayShiftOnly, state));
     });
 
+    assignments.push(...buildOverlappingLeave(assignments));
+
     return assignments;
+}
+
+// Leave that lands on top of a swing instead of replacing it: someone calls in
+// sick mid-swing, or takes annual leave that eats the tail of one. The swing
+// stays on the roster until it is re-planned, so both records share the row and
+// the dates overlap.
+function buildOverlappingLeave(assignments) {
+    const swings = assignments.filter((row) => row.category === "Day shift" || row.category === "Night shift");
+    const leave = [];
+    const taken = [];
+
+    // Never twice over the same swing: two leave records on one swing read as a
+    // data error rather than as the overlap this sample is meant to show.
+    const claim = (swing) => {
+        if (taken.includes(swing)) return false;
+        taken.push(swing);
+        return true;
+    };
+
+    if (swings.length >= 3 && leaveRng() < 0.3) {
+        // Sick leave, wholly inside a swing of three days or more.
+        const swing = swings[1 + Math.floor(leaveRng() * (swings.length - 1))];
+        const span = diffDays(swing.start, swing.end) + 1;
+        if (span >= 3 && claim(swing)) {
+            const days = 1 + Math.floor(leaveRng() * Math.min(3, span - 2));
+            const offset = 1 + Math.floor(leaveRng() * (span - days - 1));
+            const start = addDays(swing.start, offset);
+            leave.push(makeRow("Sick leave", "Leave", start, addDays(start, days - 1), "", swing.roster));
+        }
+    }
+
+    if (swings.length >= 4 && leaveRng() < 0.22) {
+        // Annual leave starting mid-swing and running past its end, so the bar
+        // overhangs the swing it overlaps.
+        const swing = swings[2 + Math.floor(leaveRng() * (swings.length - 2))];
+        const span = diffDays(swing.start, swing.end) + 1;
+        if (span >= 4 && claim(swing)) {
+            const start = addDays(swing.start, Math.max(1, Math.floor(span / 2)));
+            const end = addDays(swing.end, 3 + Math.floor(leaveRng() * 8));
+            leave.push(makeRow("Annual leave", "Leave", start, end > RANGE_END ? RANGE_END : end, "", swing.roster));
+        }
+    }
+
+    return leave;
 }
 
 function buildSwings(roster, from, to, isMidCycle, dayShiftOnly, state) {
@@ -198,7 +369,9 @@ function buildSwings(roster, from, to, isMidCycle, dayShiftOnly, state) {
                 swings.push(makeRow("Annual leave", "Leave", start, end, "", roster.code));
             } else {
                 const shift = state.isNight ? "Night" : "Day";
-                swings.push(makeRow(`Swing ${state.swing} - ${shift} shift`, `${shift} shift`, start, end, shift, roster.code));
+                swings.push(
+                    makeRow(`Swing ${state.swing} - ${shift} shift`, `${shift} shift`, start, end, shift, roster.code)
+                );
                 if (roster.alternateShifts && !dayShiftOnly) state.isNight = !state.isNight;
             }
         }
@@ -249,7 +422,10 @@ function addDays(date, days) {
 }
 
 function diffDays(a, b) {
-    return Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
+    return Math.round(
+        (Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) /
+            86400000
+    );
 }
 
 function pick(list) {

@@ -68,6 +68,11 @@ function render(options: MockOptions) {
     return { control, context, dataset, notify, props };
 }
 
+function renderAgain(control: GanttControl, context: ComponentFramework.Context<IInputs>): GanttChartProps {
+    const provider = control.updateView(context) as React.ReactElement<{ children: React.ReactElement }>;
+    return provider.props.children.props as GanttChartProps;
+}
+
 const d = (year: number, month: number, day: number) => new Date(year, month - 1, day);
 
 describe("GanttControl", () => {
@@ -226,6 +231,129 @@ describe("GanttControl", () => {
         expect(dataset.setSelectedRecordIds).toHaveBeenCalledWith(["1"]);
         expect(notify).toHaveBeenCalledTimes(1);
         expect(control.getOutputs()).toEqual({ selectedTaskId: "1" });
+    });
+
+    // The chart resolves a repeat click into a cleared selection; the control
+    // publishes whatever it is handed.
+    it("clears the selection when the chart reports nothing selected", () => {
+        const { props, dataset, notify, control } = render({
+            rows: [
+                { id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-01" },
+                { id: "2", title: "U", startDate: "2024-01-01", endDate: "2024-01-01" },
+            ],
+        });
+
+        props.onSelect("1");
+        props.onSelect(undefined);
+
+        expect(dataset.setSelectedRecordIds).toHaveBeenLastCalledWith([]);
+        expect(notify).toHaveBeenCalledTimes(2);
+        expect(control.getOutputs()).toEqual({ selectedTaskId: undefined });
+
+        props.onSelect("1");
+        props.onSelect("2");
+
+        expect(dataset.setSelectedRecordIds).toHaveBeenLastCalledWith(["2"]);
+        expect(control.getOutputs()).toEqual({ selectedTaskId: "2" });
+    });
+
+    it("selects a row on its own, and swaps between a row and a task", () => {
+        const { props, dataset, control } = render({
+            rows: [
+                { id: "r1", title: "Swing 1", startDate: "2024-01-01", endDate: "2024-01-02", crew: "Mech" },
+                { id: "r2", title: "Swing 2", startDate: "2024-01-10", endDate: "2024-01-11", crew: "Mech" },
+                { id: "r3", title: "Solo", startDate: "2024-01-01", endDate: "2024-01-02", crew: "Elec" },
+            ],
+            settings: { rowField: "crew" },
+        });
+
+        props.onSelectRow("Mech");
+
+        // A row stands for every record drawn on it.
+        expect(dataset.setSelectedRecordIds).toHaveBeenLastCalledWith(["r1", "r2"]);
+        expect(control.getOutputs()).toEqual({ selectedTaskId: undefined, selectedRowId: "Mech" });
+
+        // Picking a bar drops the row, and picking a row drops the bar.
+        props.onSelect("r2");
+
+        expect(dataset.setSelectedRecordIds).toHaveBeenLastCalledWith(["r2"]);
+        expect(control.getOutputs()).toEqual({ selectedTaskId: "r2", selectedRowId: undefined });
+
+        props.onSelectRow("Elec");
+
+        expect(control.getOutputs()).toEqual({ selectedTaskId: undefined, selectedRowId: "Elec" });
+    });
+
+    it("clears the row when the chart reports no row selected", () => {
+        const { props, dataset, control, notify } = render({
+            rows: [{ id: "r1", title: "Solo", startDate: "2024-01-01", endDate: "2024-01-02" }],
+        });
+
+        // Ungrouped rows are known by their task id.
+        props.onSelectRow("r1");
+        props.onSelectRow(undefined);
+
+        expect(dataset.setSelectedRecordIds).toHaveBeenLastCalledWith([]);
+        expect(control.getOutputs()).toEqual({ selectedTaskId: undefined, selectedRowId: undefined });
+        expect(notify).toHaveBeenCalledTimes(2);
+    });
+
+    it("selects and opens the record behind a task identified by an ID field", () => {
+        const { props, dataset, control } = render({
+            rows: [
+                { id: "r1", code: "E1", title: "T", startDate: "2024-01-01", endDate: "2024-01-01" },
+                { id: "r2", code: "E2", title: "U", startDate: "2024-01-01", endDate: "2024-01-01" },
+            ],
+            settings: { idField: "code" },
+        });
+
+        expect(props.tasks.map((task) => task.id)).toEqual(["E1", "E2"]);
+
+        props.onSelect("E2");
+
+        // The host only knows record ids, never the ID field's value.
+        expect(dataset.setSelectedRecordIds).toHaveBeenCalledWith(["r2"]);
+        expect(control.getOutputs()).toEqual({ selectedTaskId: "E2" });
+
+        props.onOpen("E2");
+
+        expect(dataset.openDatasetItem).toHaveBeenCalledWith({ id: { guid: "r2" }, name: "r2" });
+        // Opening keeps the record selected rather than toggling it off.
+        expect(control.getOutputs()).toEqual({ selectedTaskId: "E2" });
+    });
+
+    it("falls back to the record id when an ID field repeats", () => {
+        const { props, dataset } = render({
+            rows: [
+                { id: "r1", code: "E1", title: "T", startDate: "2024-01-01", endDate: "2024-01-01" },
+                { id: "r2", code: "E1", title: "U", startDate: "2024-01-01", endDate: "2024-01-01" },
+            ],
+            settings: { idField: "code" },
+        });
+
+        // Sharing an id would leave the chart unable to tell the two apart.
+        expect(props.tasks.map((task) => task.id)).toEqual(["E1", "r2"]);
+
+        props.onSelect("r2");
+
+        expect(dataset.setSelectedRecordIds).toHaveBeenCalledWith(["r2"]);
+    });
+
+    it("hands the chart the same task list until the records change", () => {
+        const rows = [{ id: "r1", title: "T", startDate: "2024-01-01", endDate: "2024-01-02" }];
+        const { control, context, props } = render({ rows });
+
+        // Rebuilding the rows, the timeline and the parent index on every
+        // update is what makes a click feel slow, so an unchanged dataset has
+        // to come back as the very same array.
+        expect(renderAgain(control, context).tasks).toBe(props.tasks);
+
+        rows[0].title = "Renamed";
+
+        const changed = renderAgain(control, context).tasks;
+
+        expect(changed).not.toBe(props.tasks);
+        expect(changed[0].title).toBe("Renamed");
     });
 
     it("opens known records only", () => {

@@ -154,7 +154,16 @@ export const useGanttStyles = makeStyles({
         ":hover .gantt-list-cell": { backgroundColor: tokens.colorNeutralBackground1Hover },
         ":hover .gantt-track": { backgroundColor: tokens.colorNeutralBackground1Hover },
     },
+    /**
+     * Two states, and they must not read alike: the row the user picked carries
+     * a brand wash and an accent edge, while a row holding the selected bar is
+     * only tinted, so it reads as "the selection is in here".
+     */
     rowSelected: {
+        ":hover .gantt-list-cell": { backgroundColor: tokens.colorBrandBackground2Hover },
+        ":hover .gantt-track": { backgroundColor: tokens.colorBrandBackground2Hover },
+    },
+    rowHighlighted: {
         ":hover .gantt-list-cell": { backgroundColor: tokens.colorNeutralBackground1Selected },
         ":hover .gantt-track": { backgroundColor: tokens.colorNeutralBackground1Selected },
     },
@@ -185,10 +194,26 @@ export const useGanttStyles = makeStyles({
         backgroundColor: tokens.colorNeutralBackground1,
         borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke3}`,
     },
+    listCellRowSelected: {
+        backgroundColor: tokens.colorBrandBackground2,
+    },
+    /** The accent edge, drawn inside the name cell so it rides the sticky pane. */
+    listCellAccent: {
+        "::before": {
+            content: '""',
+            position: "absolute",
+            insetInlineStart: 0,
+            top: 0,
+            bottom: 0,
+            width: "3px",
+            backgroundColor: tokens.colorBrandStroke1,
+        },
+    },
     listCellSelected: {
         backgroundColor: tokens.colorNeutralBackground1Selected,
     },
     listCellName: {
+        position: "relative",
         flexGrow: 1,
         // flexBasis 0 makes the name take the leftover space rather than its
         // content width, so the fixed columns cannot squeeze it out entirely.
@@ -332,12 +357,18 @@ export const useGanttStyles = makeStyles({
 
     track: {
         position: "relative",
+        // Keeps the z-index a stack of overlapping bars uses inside the row, so
+        // it cannot compete with the today marker or the sticky task list.
+        isolation: "isolate",
         height: "100%",
         boxSizing: "border-box",
         borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke3}`,
     },
     trackSelected: {
         backgroundColor: tokens.colorNeutralBackground1Selected,
+    },
+    trackRowSelected: {
+        backgroundColor: tokens.colorBrandBackground2,
     },
     /** Column rules and weekend shading, painted once per row as a gradient. */
     trackGrid: {

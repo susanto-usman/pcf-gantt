@@ -70,12 +70,46 @@ function toText(value: unknown): string | null {
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
+/** Whether two builds of the task list describe the same records, field for field. */
+function sameTasks(previous: GanttTask[], next: GanttTask[]): boolean {
+    if (previous.length !== next.length) {
+        return false;
+    }
+
+    return next.every((task, index) => {
+        const was = previous[index];
+
+        return (
+            was.id === task.id &&
+            was.title === task.title &&
+            was.start.getTime() === task.start.getTime() &&
+            was.end.getTime() === task.end.getTime() &&
+            was.progress === task.progress &&
+            was.parentId === task.parentId &&
+            was.category === task.category &&
+            was.rowKey === task.rowKey &&
+            was.rowTitle === task.rowTitle
+        );
+    });
+}
+
 const DENSITIES: Density[] = ["comfortable", "compact"];
 const TIME_SCALES: TimeScale[] = ["day", "week", "month"];
 
 export class GanttControl implements ComponentFramework.ReactControl<IInputs, IOutputs> {
     private notifyOutputChanged: () => void;
     private selectedTaskId: string | undefined;
+    private selectedRowId: string | undefined;
+    /**
+     * Task id to dataset record id. The ID field lets a task be identified by a
+     * column rather than by the record, and the host only ever knows the record.
+     */
+    private recordIdOf = new Map<string, string>();
+    /** Row id to the record ids drawn on that row, which a merged row has several of. */
+    private rowRecordIds = new Map<string, string[]>();
+    /** The dataset from the current updateView, so the handlers below can stay stable. */
+    private dataset: ComponentFramework.PropertyTypes.DataSet | undefined;
+    private tasks: GanttTask[] = [];
 
     public init(context: ComponentFramework.Context<IInputs>, notifyOutputChanged: () => void): void {
         this.notifyOutputChanged = notifyOutputChanged;
@@ -87,7 +121,16 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
     public updateView(context: ComponentFramework.Context<IInputs>): React.ReactElement {
         const dataset = context.parameters.tasks;
 
-        const tasks = this.buildTasks(context, dataset);
+        this.dataset = dataset;
+
+        const built = this.buildTasks(context, dataset);
+
+        // The chart derives the rows, the timeline and the parent index from
+        // this array, so handing back the same instance when the records have
+        // not changed keeps a selection from rebuilding all of it.
+        this.tasks = sameTasks(this.tasks, built) ? this.tasks : built;
+
+        const tasks = this.tasks;
         const paging = dataset.paging;
 
         const chart = React.createElement(GanttChart, {
@@ -100,6 +143,7 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
                 end: this.readFieldName(context, "endField", "endDate"),
             },
             selectedTaskId: this.selectedTaskId,
+            selectedRowId: this.selectedRowId,
             density: this.readEnum(context, "density", DENSITIES, "comfortable"),
             timeScale: this.readEnum(context, "timeScale", TIME_SCALES, "day"),
             showToolbar: this.readBoolean(context, "showToolbar", true),
@@ -109,23 +153,12 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             hasNextPage: Boolean(paging && paging.hasNextPage),
             width: context.mode.allocatedWidth > 0 ? context.mode.allocatedWidth : 0,
             height: context.mode.allocatedHeight > 0 ? context.mode.allocatedHeight : 0,
-            onSelect: (taskId: string) => {
-                this.selectedTaskId = taskId;
-                // Keeps the host's command bar and any linked controls in step.
-                dataset.setSelectedRecordIds([taskId]);
-                this.notifyOutputChanged();
-            },
-            onOpen: (taskId: string) => {
-                const record = dataset.records[taskId];
-                if (record) {
-                    dataset.openDatasetItem(record.getNamedReference());
-                }
-            },
-            onLoadMore: () => {
-                if (paging && paging.hasNextPage && !dataset.loading) {
-                    paging.loadNextPage();
-                }
-            },
+            // Stable identities: a new handler on every update would re-render
+            // every visible row, however little of the chart actually changed.
+            onSelect: this.handleSelect,
+            onSelectRow: this.handleSelectRow,
+            onOpen: this.handleOpen,
+            onLoadMore: this.handleLoadMore,
             start: this.readBoundary(context.parameters.start),
             end: this.readBoundary(context.parameters.end),
         });
@@ -142,8 +175,58 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
         );
     }
 
+    /** The chart resolves what a click selects; the control only publishes it. */
+    private readonly handleSelect = (taskId: string | undefined): void => {
+        this.select(taskId, undefined);
+    };
+
+    private readonly handleSelectRow = (rowId: string | undefined): void => {
+        this.select(undefined, rowId);
+    };
+
+    private readonly handleOpen = (taskId: string): void => {
+        const record = this.dataset?.records[this.recordIdOf.get(taskId) ?? taskId];
+
+        if (record) {
+            // The second click of a double-click toggles the bar off, so
+            // opening re-asserts it; the chart follows the props back.
+            this.select(taskId, undefined);
+            this.dataset?.openDatasetItem(record.getNamedReference());
+        }
+    };
+
+    private readonly handleLoadMore = (): void => {
+        const paging = this.dataset?.paging;
+
+        if (paging && paging.hasNextPage && !this.dataset?.loading) {
+            paging.loadNextPage();
+        }
+    };
+
+    private select(taskId: string | undefined, rowId: string | undefined): void {
+        this.selectedTaskId = taskId;
+        this.selectedRowId = rowId;
+        // Keeps the host's command bar and any linked controls in step. A row
+        // stands for every record drawn on it, which for a merged row is more
+        // than one.
+        this.dataset?.setSelectedRecordIds(this.selectedRecordIds(taskId, rowId));
+        this.notifyOutputChanged();
+    }
+
+    private selectedRecordIds(taskId: string | undefined, rowId: string | undefined): string[] {
+        if (taskId !== undefined) {
+            return [this.recordIdOf.get(taskId) ?? taskId];
+        }
+
+        if (rowId !== undefined) {
+            return this.rowRecordIds.get(rowId) ?? [];
+        }
+
+        return [];
+    }
+
     public getOutputs(): IOutputs {
-        return { selectedTaskId: this.selectedTaskId };
+        return { selectedTaskId: this.selectedTaskId, selectedRowId: this.selectedRowId };
     }
 
     public destroy(): void {
@@ -155,6 +238,9 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
         dataset: ComponentFramework.PropertyTypes.DataSet
     ): GanttTask[] {
         const tasks: GanttTask[] = [];
+
+        this.recordIdOf = new Map<string, string>();
+        this.rowRecordIds = new Map<string, string[]>();
 
         // Deliberately not short-circuiting on dataset.loading: paging in the
         // next page sets it while the existing records are still valid, and
@@ -194,15 +280,34 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
                 continue;
             }
 
+            const customId = this.readText(record, idField);
+            // Two tasks sharing an id are indistinguishable to selection: the
+            // chart would light up whichever came first. Only the first record
+            // keeps a repeated id, the rest fall back to their record id.
+            const id = customId !== null && !this.recordIdOf.has(customId) ? customId : recordId;
+
+            const rowKey = this.readText(record, rowField);
+            // Mirrors rowIdOf: a grouped row is known by its Row field value,
+            // and any other row by the one task it carries.
+            const rowId = rowKey ?? id;
+            const onRow = this.rowRecordIds.get(rowId);
+
+            this.recordIdOf.set(id, recordId);
+            if (onRow) {
+                onRow.push(recordId);
+            } else {
+                this.rowRecordIds.set(rowId, [recordId]);
+            }
+
             tasks.push({
-                id: this.readText(record, idField) ?? recordId,
+                id,
                 title: this.readText(record, titleField) ?? "Untitled task",
                 start,
                 end: end >= start ? end : start,
                 progress: Math.round(Math.max(0, Math.min(100, this.readNumber(record, progressField, 0)))),
                 parentId: this.readText(record, parentField),
                 category: this.readText(record, categoryField),
-                rowKey: this.readText(record, rowField),
+                rowKey,
                 rowTitle: this.readText(record, rowTitleField),
             });
         }
