@@ -385,10 +385,56 @@ export const useGanttStyles = makeStyles({
         transitionTimingFunction: tokens.curveEasyEase,
         transitionProperty: "box-shadow, transform, filter",
         ":hover": { filter: "brightness(1.06)", boxShadow: tokens.shadow4 },
+        // The grips stay invisible but grabbable until the bar is pointed at.
+        ":hover .gantt-bar-handle": { opacity: 0.75 },
         ":focus-visible": {
             outline: `${tokens.strokeWidthThick} solid ${tokens.colorStrokeFocus2}`,
             outlineOffset: "1px",
         },
+    },
+    /** A bar the user may drag along the timeline. */
+    barDraggable: {
+        cursor: "grab",
+        // Without this a touch drag scrolls the chart instead of moving the bar.
+        touchAction: "none",
+    },
+    barDragging: {
+        cursor: "grabbing",
+        // Clear of the rest of the row's stack while it is being carried.
+        zIndex: 5,
+        boxShadow: tokens.shadow8,
+        ":hover": { filter: "none" },
+    },
+    /**
+     * An edit that has been published but not yet seen coming back through the
+     * data. Drawn in its new place, but marked as not settled.
+     */
+    barPending: {
+        outline: `${tokens.strokeWidthThin} dashed ${tokens.colorNeutralForeground3}`,
+        outlineOffset: "1px",
+    },
+    /** Grip at either end of a bar; drag it to change that date alone. */
+    barHandle: {
+        position: "absolute",
+        top: "2px",
+        bottom: "2px",
+        width: "6px",
+        zIndex: 1,
+        boxSizing: "border-box",
+        cursor: "ew-resize",
+        touchAction: "none",
+        opacity: 0,
+        borderRadius: tokens.borderRadiusSmall,
+        backgroundColor: tokens.colorNeutralBackground1,
+        transitionDuration: tokens.durationFaster,
+        transitionProperty: "opacity",
+        ":hover": { opacity: 1 },
+    },
+    barHandleStart: {
+        insetInlineStart: "2px",
+    },
+    barHandleEnd: {
+        insetInlineEnd: "2px",
     },
     barSelected: {
         boxShadow: `0 0 0 ${tokens.strokeWidthThick} ${tokens.colorNeutralBackground1}, 0 0 0 calc(${tokens.strokeWidthThick} * 2) ${tokens.colorBrandStroke1}`,
@@ -439,6 +485,11 @@ export const useGanttStyles = makeStyles({
         transform: "translateY(-50%) rotate(45deg)",
         borderRadius: tokens.borderRadiusSmall,
         cursor: "pointer",
+    },
+    /** The diamond is already rotated, so it cannot reuse the bar's drag styles. */
+    milestoneDraggable: {
+        cursor: "grab",
+        touchAction: "none",
     },
 
     /** Tooltip body ----------------------------------------------------- */

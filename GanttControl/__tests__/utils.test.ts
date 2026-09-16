@@ -3,25 +3,30 @@ import { GanttTask } from "../types";
 import {
     addDays,
     addMonths,
+    applyDrag,
+    applyPendingEdits,
     barGeometry,
     buildRows,
     buildTimeline,
+    clampDragDays,
     collectParentIds,
     dateToOffset,
     diffInDays,
     getTaskExtent,
     getTaskStatus,
-    hasTimeOfDay,
     instantToOffset,
     isSameDay,
     isWeekend,
+    offsetToDays,
     overlapHeight,
     overlapLevels,
     pickSegment,
+    pixelsPerDay,
     selectRow,
     selectTask,
     startOfMonth,
     startOfWeek,
+    toLocalIso,
 } from "../utils";
 
 /** Local-time date, so tests hold in any timezone. Months are 1-based for readability. */
@@ -38,6 +43,7 @@ const task = (overrides: Partial<GanttTask> & Pick<GanttTask, "id">): GanttTask 
     colorKey: null,
     rowKey: null,
     rowTitle: null,
+    isLocked: false,
     ...overrides,
 });
 
@@ -450,5 +456,141 @@ describe("getTaskStatus", () => {
         ["at risk when more than 10 points behind", 39, d(2024, 1, 5), "atRisk"],
     ] as const)("is %s", (_, progress, today, expected) => {
         expect(getTaskStatus(start, end, progress, today)).toBe(expected);
+    });
+});
+
+describe("editing geometry", () => {
+    it("reads a day off the timeline at each scale", () => {
+        const day = buildTimeline(d(2024, 1, 1), d(2024, 1, 10), "day", "comfortable", d(2024, 1, 1));
+        const week = buildTimeline(d(2024, 1, 1), d(2024, 1, 10), "week", "comfortable", d(2024, 1, 1));
+        const month = buildTimeline(d(2024, 1, 1), d(2024, 3, 1), "month", "comfortable", d(2024, 1, 1));
+
+        expect(pixelsPerDay(day)).toBe(40);
+        expect(pixelsPerDay(week)).toBeCloseTo(64 / 7);
+        // An average month, near enough at a zoom that cannot draw a day.
+        expect(pixelsPerDay(month)).toBeCloseTo(88 / 30.4375);
+    });
+
+    it("snaps a drag to whole days, rounding to the nearer one", () => {
+        const timeline = buildTimeline(d(2024, 1, 1), d(2024, 1, 10), "day", "comfortable", d(2024, 1, 1));
+
+        expect(offsetToDays(0, timeline)).toBe(0);
+        expect(offsetToDays(19, timeline)).toBe(0);
+        expect(offsetToDays(21, timeline)).toBe(1);
+        expect(offsetToDays(-85, timeline)).toBe(-2);
+    });
+});
+
+describe("applyDrag", () => {
+    const start = at(2024, 1, 10, 9);
+    const end = at(2024, 1, 12, 17);
+
+    it("moves both ends together, keeping the time of day", () => {
+        expect(applyDrag(start, end, "move", 3)).toEqual({ start: at(2024, 1, 13, 9), end: at(2024, 1, 15, 17) });
+        expect(applyDrag(start, end, "move", -9)).toEqual({ start: at(2024, 1, 1, 9), end: at(2024, 1, 3, 17) });
+    });
+
+    it("moves one end only when resizing", () => {
+        expect(applyDrag(start, end, "start", -2)).toEqual({ start: at(2024, 1, 8, 9), end });
+        expect(applyDrag(start, end, "end", 4)).toEqual({ start, end: at(2024, 1, 16, 17) });
+    });
+
+    it("will not pull either end past the other", () => {
+        // The span is two days, so that is as far as a resize may close it.
+        expect(applyDrag(start, end, "start", 8)).toEqual({ start: at(2024, 1, 12, 9), end });
+        expect(applyDrag(start, end, "end", -8)).toEqual({ start, end: at(2024, 1, 10, 17) });
+    });
+
+    it("leaves a single-day task alone rather than inverting it", () => {
+        const only = d(2024, 1, 10);
+
+        expect(applyDrag(only, only, "start", 5)).toEqual({ start: only, end: only });
+        expect(applyDrag(only, only, "end", -5)).toEqual({ start: only, end: only });
+    });
+
+    it("clamps the days a drag is worth, so a preview can be drawn from them", () => {
+        expect(clampDragDays(start, end, "move", 40)).toBe(40);
+        expect(clampDragDays(start, end, "start", 40)).toBe(2);
+        expect(clampDragDays(start, end, "end", -40)).toBe(-2);
+        expect(clampDragDays(start, end, "end", 3)).toBe(3);
+    });
+
+    it("moves a date-only task without giving it a time", () => {
+        expect(applyDrag(d(2024, 1, 10), d(2024, 1, 12), "move", 1)).toEqual({
+            start: d(2024, 1, 11),
+            end: d(2024, 1, 13),
+        });
+    });
+});
+
+describe("applyPendingEdits", () => {
+    const tasks = [
+        task({ id: "a", start: d(2024, 1, 1), end: d(2024, 1, 3) }),
+        task({ id: "b", start: d(2024, 1, 5), end: d(2024, 1, 6) }),
+    ];
+
+    it("hands the list straight back when nothing is in flight", () => {
+        expect(applyPendingEdits(tasks, new Map())).toBe(tasks);
+    });
+
+    it("draws an edited task at its new dates without touching the rest", () => {
+        const edits = new Map([["b", { start: d(2024, 1, 8), end: d(2024, 1, 9) }]]);
+        const pending = applyPendingEdits(tasks, edits);
+
+        expect(pending[0]).toBe(tasks[0]);
+        expect(pending[1]).toMatchObject({ id: "b", start: d(2024, 1, 8), end: d(2024, 1, 9) });
+        // The source list is untouched, so a settled edit restores it exactly.
+        expect(tasks[1].start).toEqual(d(2024, 1, 5));
+    });
+});
+
+describe("locked records", () => {
+    const segment = (id: string, day: number, isLocked: boolean) =>
+        task({ id, rowKey: "Mech", start: d(2024, 1, day), end: d(2024, 1, day), isLocked });
+
+    it("locks a merged row only once every record on it is locked", () => {
+        const mixed = buildRows([segment("s1", 1, true), segment("s2", 8, false)], none);
+        const all = buildRows([segment("s1", 1, true), segment("s2", 8, true)], none);
+
+        expect(mixed[0].task.isLocked).toBe(false);
+        expect(all[0].task.isLocked).toBe(true);
+        // Either way each bar still answers for itself.
+        expect(mixed[0].segments.map((entry) => entry.isLocked)).toEqual([true, false]);
+    });
+});
+
+describe("toLocalIso", () => {
+    /** The offset the machine running the test is in, as the format writes it. */
+    const offsetOf = (date: Date) => {
+        const minutes = -date.getTimezoneOffset();
+        const sign = minutes < 0 ? "-" : "+";
+        const size = Math.abs(minutes);
+        return `${sign}${String(Math.floor(size / 60)).padStart(2, "0")}:${String(size % 60).padStart(2, "0")}`;
+    };
+
+    it("writes the wall clock the user sees, with its offset", () => {
+        const instant = new Date(2026, 8, 20, 9, 5, 0);
+
+        expect(toLocalIso(instant)).toBe(`2026-09-20T09:05:00${offsetOf(instant)}`);
+    });
+
+    it("keeps a date-only task on its own day in any timezone", () => {
+        const midnight = d(2026, 9, 20);
+
+        // toISOString would move this to the 19th anywhere east of UTC.
+        expect(toLocalIso(midnight)).toBe(`2026-09-20T00:00:00${offsetOf(midnight)}`);
+        expect(toLocalIso(midnight).slice(0, 10)).toBe("2026-09-20");
+    });
+
+    it("pads every part to a fixed width", () => {
+        const early = new Date(2026, 0, 2, 3, 4, 5);
+
+        expect(toLocalIso(early)).toBe(`2026-01-02T03:04:05${offsetOf(early)}`);
+    });
+
+    it("round-trips back to the same instant", () => {
+        const instant = new Date(2026, 8, 20, 9, 5, 0);
+
+        expect(new Date(toLocalIso(instant)).getTime()).toBe(instant.getTime());
     });
 });

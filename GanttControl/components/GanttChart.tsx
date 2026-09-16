@@ -12,8 +12,9 @@ import {
 import * as React from "react";
 import { buildColorScheme } from "../colors";
 import { cssVars, LIST_COLUMN_WIDTHS, MIN_NAME_TEXT_WIDTH, NAME_CELL_CHROME, useGanttStyles } from "../styles";
-import { Density, GanttChartProps, GanttSelection, TimeScale } from "../types";
+import { Density, GanttChartProps, GanttSelection, TaskEdit, TimeScale } from "../types";
 import {
+    applyPendingEdits,
     BAR_HEIGHT,
     buildRows,
     buildTimeline,
@@ -43,6 +44,13 @@ const MAX_LIST_WIDTH = 640;
 /** Rows rendered above and below the viewport so scrolling stays smooth. */
 const OVERSCAN = 8;
 const BOUNDARY_DEBOUNCE_MS = 500;
+/**
+ * How long an edit stays drawn before the chart gives up waiting for the host.
+ * The usual settlement is the dataset coming back changed; this is the backstop
+ * for an app that was never wired up to save anything, so the bar returns to
+ * where the data still says it is rather than lying indefinitely.
+ */
+const PENDING_TIMEOUT_MS = 8000;
 /** Ten years; a longer boundary is treated as a typo rather than drawn. */
 const MAX_BOUNDARY_SPAN_MS = 3653 * 86400000;
 
@@ -76,6 +84,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     showCurrentTime,
     showProgress,
     showLegend,
+    canEdit,
     isLoading,
     hasNextPage,
     width,
@@ -83,6 +92,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     onSelect,
     onSelectRow,
     onOpen,
+    onEdit,
     onLoadMore,
     start,
     end,
@@ -147,6 +157,53 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     const unmatchedKey = unmatchedFields.map((item) => `${item.setting}=${item.field}`).join("|");
     const [dismissedKey, setDismissedKey] = React.useState("");
 
+    /** Editing ---------------------------------------------------------- */
+    /**
+     * Drags the user has made and the host has not yet saved. The chart draws
+     * them immediately — a bar that snapped back while the round trip ran would
+     * read as the drag having failed — and lets them go once the records change.
+     */
+    const [pendingEdits, setPendingEdits] = React.useState<ReadonlyMap<string, { start: Date; end: Date }>>(
+        () => new Map()
+    );
+
+    const clearPending = React.useCallback(() => {
+        setPendingEdits((current) => (current.size === 0 ? current : new Map()));
+    }, []);
+
+    const handleEdit = React.useCallback(
+        (edit: TaskEdit) => {
+            setPendingEdits((current) => new Map(current).set(edit.taskId, { start: edit.start, end: edit.end }));
+            onEdit(edit);
+        },
+        [onEdit]
+    );
+
+    const liveTasks = React.useMemo(() => applyPendingEdits(tasks, pendingEdits), [tasks, pendingEdits]);
+
+    /** The task list the pending edits were made against, to tell a save apart from a redraw. */
+    const editedAgainst = React.useRef(tasks);
+
+    React.useEffect(() => {
+        if (pendingEdits.size === 0) {
+            editedAgainst.current = tasks;
+            return undefined;
+        }
+
+        // The control hands back the same array while the records are unchanged,
+        // so a different one means the data moved — and whichever way the save
+        // went, what it now says wins over what the chart drew.
+        if (editedAgainst.current !== tasks) {
+            clearPending();
+            return undefined;
+        }
+
+        // Restarted by each further edit, so a second drag is not cut short by
+        // the first one's clock.
+        const timeoutId = window.setTimeout(clearPending, PENDING_TIMEOUT_MS);
+        return () => window.clearTimeout(timeoutId);
+    }, [pendingEdits, tasks, clearPending]);
+
     // Maker-facing properties act as the initial value; the toolbar owns the
     // setting afterwards, so re-publishing a new default still takes effect.
     React.useEffect(() => setDensity(densityProp), [densityProp]);
@@ -185,17 +242,17 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         const term = search.trim().toLowerCase();
 
         if (!term) {
-            return tasks;
+            return liveTasks;
         }
 
-        return tasks.filter(
+        return liveTasks.filter(
             (task) =>
                 task.title.toLowerCase().indexOf(term) >= 0 ||
                 (task.category ?? "").toLowerCase().indexOf(term) >= 0 ||
                 (task.rowKey ?? "").toLowerCase().indexOf(term) >= 0 ||
                 (task.rowTitle ?? "").toLowerCase().indexOf(term) >= 0
         );
-    }, [tasks, search]);
+    }, [liveTasks, search]);
 
     const rows = React.useMemo(() => buildRows(filteredTasks, collapsedIds), [filteredTasks, collapsedIds]);
 
@@ -426,6 +483,10 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     // Exactly one row carries tabIndex 0 so the grid is a single tab stop, and
     // it falls back to the first row when nothing is selected.
     const tabStopId = activeRowId ?? rows[0]?.task.id;
+
+    // A set rather than the map itself, since a bar only asks whether its own
+    // edit has settled.
+    const pendingIds = React.useMemo<ReadonlySet<string>>(() => new Set(pendingEdits.keys()), [pendingEdits]);
 
     const containerStyle = {
         // An explicit allocated width stops the timeline's content width from
@@ -686,9 +747,12 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                                 isTabStop={row.task.id === tabStopId}
                                 maxIndent={maxIndent}
                                 showProgress={showProgress}
+                                canEdit={canEdit}
+                                pendingIds={pendingIds}
                                 onSelect={handleSelect}
                                 onSelectRow={handleSelectRow}
                                 onOpen={onOpen}
+                                onEdit={handleEdit}
                                 onToggleExpand={handleToggleExpand}
                             />
                         ))}

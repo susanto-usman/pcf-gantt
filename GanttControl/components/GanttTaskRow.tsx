@@ -2,7 +2,7 @@ import { Button, mergeClasses, ProgressBar, Text, tokens } from "@fluentui/react
 import * as React from "react";
 import { ColorScheme } from "../colors";
 import { useGanttStyles } from "../styles";
-import { Density, GanttRow, GanttTask, RowSelection, Timeline } from "../types";
+import { Density, EditPermissions, GanttRow, GanttTask, RowSelection, TaskEdit, Timeline } from "../types";
 import {
     barGeometry,
     diffInDays,
@@ -11,6 +11,7 @@ import {
     overlapHeight,
     overlapLevels,
     pickSegment,
+    pixelsPerDay,
     rowIdOf,
 } from "../utils";
 import { BarLayout, BarOverlap, GanttBar } from "./GanttBar";
@@ -33,9 +34,14 @@ export interface GanttTaskRowProps {
     /** Ceiling on indentation, so a deep tree cannot squeeze out the name. */
     maxIndent: number;
     showProgress: boolean;
+    /** Whether the maker allows bars to be moved or resized. */
+    canEdit: EditPermissions;
+    /** Ids on this row whose edit is published but not yet settled by the data. */
+    pendingIds: ReadonlySet<string>;
     onSelect: (taskId: string) => void;
     onSelectRow: (rowId: string) => void;
     onOpen: (taskId: string) => void;
+    onEdit: (edit: TaskEdit) => void;
     onToggleExpand: (taskId: string) => void;
 }
 
@@ -54,9 +60,12 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
     isTabStop,
     maxIndent,
     showProgress,
+    canEdit,
+    pendingIds,
     onSelect,
     onSelectRow,
     onOpen,
+    onEdit,
     onToggleExpand,
 }) => {
     const styles = useGanttStyles();
@@ -251,9 +260,12 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
                                 rowLabel={row.task.title}
                                 overlap={overlapFor(levels[index], topOfStack, layout.isMilestone, density)}
                                 isSelected={segment.id === selectedTaskId}
+                                isPending={pendingIds.has(segment.id)}
                                 showProgress={showProgress}
+                                canEdit={canEdit}
                                 onSelect={onSelect}
                                 onOpen={onOpen}
+                                onEdit={onEdit}
                             />
                         );
                     })
@@ -269,9 +281,12 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
                         // Selecting the row is not selecting its bar, so only a
                         // bar the user picked carries the ring.
                         isSelected={selection === "task"}
+                        isPending={pendingIds.has(row.task.id)}
                         showProgress={showProgress}
+                        canEdit={canEdit}
                         onSelect={onSelect}
                         onOpen={onOpen}
+                        onEdit={onEdit}
                     />
                 )}
             </div>
@@ -313,8 +328,9 @@ function layoutFor(
         start,
         end,
         progress,
-        palette: colors.paletteFor(task.colorKey, status),
-        label: colors.labelFor(task.colorKey, status),
+        pixelsPerDay: pixelsPerDay(timeline),
+        palette: colors.paletteFor(task.colorKey ?? "", status),
+        label: colors.labelFor(task.colorKey ?? "", status),
         caption: colors.caption,
         isMilestone: !isSummary && diffInDays(start, end) === 0 && timeline.scale !== "day",
     };

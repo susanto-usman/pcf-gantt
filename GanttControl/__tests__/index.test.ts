@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { GanttControl } from "../index";
 import { IInputs } from "../generated/ManifestTypes";
 import { GanttChartProps } from "../types";
+import { toLocalIso } from "../utils";
 
 type Row = Record<string, unknown>;
 
@@ -75,6 +76,12 @@ function renderAgain(control: GanttControl, context: ComponentFramework.Context<
 
 const d = (year: number, month: number, day: number) => new Date(year, month - 1, day);
 
+/** Just the selection half of the outputs, so the edit outputs need not be spelled out. */
+function selection(control: GanttControl) {
+    const { selectedTaskId, selectedRowId } = control.getOutputs();
+    return { selectedTaskId, selectedRowId };
+}
+
 describe("GanttControl", () => {
     it("maps records to tasks using the default column names", () => {
         const { props } = render({
@@ -102,6 +109,7 @@ describe("GanttControl", () => {
                 colorKey: null,
                 rowKey: null,
                 rowTitle: null,
+                isLocked: false,
             },
         ]);
         expect(props.recordCount).toBe(1);
@@ -293,7 +301,7 @@ describe("GanttControl", () => {
 
         expect(dataset.setSelectedRecordIds).toHaveBeenCalledWith(["1"]);
         expect(notify).toHaveBeenCalledTimes(1);
-        expect(control.getOutputs()).toEqual({ selectedTaskId: "1" });
+        expect(selection(control)).toEqual({ selectedTaskId: "1", selectedRowId: undefined });
     });
 
     // The chart resolves a repeat click into a cleared selection; the control
@@ -311,13 +319,13 @@ describe("GanttControl", () => {
 
         expect(dataset.setSelectedRecordIds).toHaveBeenLastCalledWith([]);
         expect(notify).toHaveBeenCalledTimes(2);
-        expect(control.getOutputs()).toEqual({ selectedTaskId: undefined });
+        expect(selection(control)).toEqual({ selectedTaskId: undefined, selectedRowId: undefined });
 
         props.onSelect("1");
         props.onSelect("2");
 
         expect(dataset.setSelectedRecordIds).toHaveBeenLastCalledWith(["2"]);
-        expect(control.getOutputs()).toEqual({ selectedTaskId: "2" });
+        expect(selection(control)).toEqual({ selectedTaskId: "2", selectedRowId: undefined });
     });
 
     it("selects a row on its own, and swaps between a row and a task", () => {
@@ -334,17 +342,17 @@ describe("GanttControl", () => {
 
         // A row stands for every record drawn on it.
         expect(dataset.setSelectedRecordIds).toHaveBeenLastCalledWith(["r1", "r2"]);
-        expect(control.getOutputs()).toEqual({ selectedTaskId: undefined, selectedRowId: "Mech" });
+        expect(selection(control)).toEqual({ selectedTaskId: undefined, selectedRowId: "Mech" });
 
         // Picking a bar drops the row, and picking a row drops the bar.
         props.onSelect("r2");
 
         expect(dataset.setSelectedRecordIds).toHaveBeenLastCalledWith(["r2"]);
-        expect(control.getOutputs()).toEqual({ selectedTaskId: "r2", selectedRowId: undefined });
+        expect(selection(control)).toEqual({ selectedTaskId: "r2", selectedRowId: undefined });
 
         props.onSelectRow("Elec");
 
-        expect(control.getOutputs()).toEqual({ selectedTaskId: undefined, selectedRowId: "Elec" });
+        expect(selection(control)).toEqual({ selectedTaskId: undefined, selectedRowId: "Elec" });
     });
 
     it("clears the row when the chart reports no row selected", () => {
@@ -357,7 +365,7 @@ describe("GanttControl", () => {
         props.onSelectRow(undefined);
 
         expect(dataset.setSelectedRecordIds).toHaveBeenLastCalledWith([]);
-        expect(control.getOutputs()).toEqual({ selectedTaskId: undefined, selectedRowId: undefined });
+        expect(selection(control)).toEqual({ selectedTaskId: undefined, selectedRowId: undefined });
         expect(notify).toHaveBeenCalledTimes(2);
     });
 
@@ -376,13 +384,13 @@ describe("GanttControl", () => {
 
         // The host only knows record ids, never the ID field's value.
         expect(dataset.setSelectedRecordIds).toHaveBeenCalledWith(["r2"]);
-        expect(control.getOutputs()).toEqual({ selectedTaskId: "E2" });
+        expect(selection(control)).toEqual({ selectedTaskId: "E2", selectedRowId: undefined });
 
         props.onOpen("E2");
 
         expect(dataset.openDatasetItem).toHaveBeenCalledWith({ id: { guid: "r2" }, name: "r2" });
         // Opening keeps the record selected rather than toggling it off.
-        expect(control.getOutputs()).toEqual({ selectedTaskId: "E2" });
+        expect(selection(control)).toEqual({ selectedTaskId: "E2", selectedRowId: undefined });
     });
 
     it("falls back to the record id when an ID field repeats", () => {
@@ -429,6 +437,143 @@ describe("GanttControl", () => {
 
         expect(dataset.openDatasetItem).toHaveBeenCalledTimes(1);
         expect(dataset.openDatasetItem).toHaveBeenCalledWith({ id: { guid: "1" }, name: "1" });
+    });
+
+    it("leaves every editing gesture off until the maker turns it on", () => {
+        const { props } = render({ rows: [{ id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-01" }] });
+
+        expect(props.canEdit).toEqual({ move: false, resize: false });
+    });
+
+    it("reads the editing settings and keeps the same object while they hold", () => {
+        const { control, context, props } = render({
+            rows: [{ id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-01" }],
+            settings: { allowMove: true, allowResize: false },
+        });
+
+        expect(props.canEdit).toEqual({ move: true, resize: false });
+        // A fresh object every update would re-render every visible row.
+        expect(renderAgain(control, context).canEdit).toBe(props.canEdit);
+    });
+
+    it("publishes nothing until an edit is made", () => {
+        const { control } = render({
+            rows: [{ id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-03" }],
+            settings: { allowMove: true },
+        });
+
+        expect(control.getOutputs().lastEdit).toBe("");
+    });
+
+    it("publishes a drag as one JSON value, without touching the dataset", () => {
+        const { props, control, dataset, notify } = render({
+            rows: [{ id: "1", title: "Mobilisation", startDate: "2024-01-01", endDate: "2024-01-03" }],
+            settings: { allowMove: true },
+        });
+
+        props.onEdit({
+            action: "move",
+            taskId: "1",
+            title: "Mobilisation",
+            start: new Date(2024, 0, 4, 9),
+            end: new Date(2024, 0, 6, 17),
+        });
+
+        expect(notify).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(control.getOutputs().lastEdit ?? "")).toEqual({
+            stamp: 1,
+            action: "move",
+            taskId: "1",
+            title: "Mobilisation",
+            start: toLocalIso(new Date(2024, 0, 4, 9)),
+            end: toLocalIso(new Date(2024, 0, 6, 17)),
+        });
+        // Saving is the host's job; the control only reports what the user did.
+        expect(dataset.setSelectedRecordIds).not.toHaveBeenCalled();
+    });
+
+    it("stamps every edit, so repeating one still changes the value the host sees", () => {
+        const { props, control } = render({
+            rows: [{ id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-03" }],
+            settings: { allowResize: true },
+        });
+        const edit = {
+            action: "resize",
+            taskId: "1",
+            title: "T",
+            start: d(2024, 1, 1),
+            end: d(2024, 1, 5),
+        } as const;
+
+        props.onEdit(edit);
+        const first = control.getOutputs().lastEdit;
+
+        props.onEdit(edit);
+        const second = control.getOutputs().lastEdit;
+
+        expect(JSON.parse(second ?? "")).toMatchObject({ action: "resize", stamp: 2 });
+        // The same drag twice must still read as a change, or OnChange sleeps through it.
+        expect(second).not.toBe(first);
+    });
+
+    it("reads the locked field from whatever shape the host gives it", () => {
+        const { props } = render({
+            rows: [
+                { id: "bool", title: "A", startDate: "2024-01-01", endDate: "2024-01-02", frozen: true },
+                { id: "boolNo", title: "B", startDate: "2024-01-01", endDate: "2024-01-02", frozen: false },
+                { id: "yes", title: "C", startDate: "2024-01-01", endDate: "2024-01-02", frozen: "Yes" },
+                { id: "no", title: "D", startDate: "2024-01-01", endDate: "2024-01-02", frozen: " NO " },
+                { id: "one", title: "E", startDate: "2024-01-01", endDate: "2024-01-02", frozen: 1 },
+                { id: "zero", title: "F", startDate: "2024-01-01", endDate: "2024-01-02", frozen: 0 },
+                { id: "blank", title: "G", startDate: "2024-01-01", endDate: "2024-01-02", frozen: "" },
+                { id: "absent", title: "H", startDate: "2024-01-01", endDate: "2024-01-02", frozen: null },
+                // A choice column: anything that is not plainly a "no" locks it.
+                { id: "reason", title: "I", startDate: "2024-01-01", endDate: "2024-01-02", frozen: "Approved" },
+            ],
+            settings: { lockedField: "frozen" },
+        });
+
+        expect(props.tasks.filter((task) => task.isLocked).map((task) => task.id)).toEqual([
+            "bool",
+            "yes",
+            "one",
+            "reason",
+        ]);
+    });
+
+    it("prefers a two-options column's formatted label over its raw value", () => {
+        const { props } = render({
+            rows: [{ id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-02", frozen: "1" }],
+            settings: { lockedField: "frozen" },
+            formatted: { "1": { frozen: "No" } },
+        });
+
+        expect(props.tasks[0].isLocked).toBe(false);
+    });
+
+    it("leaves every task unlocked when no locked field is set", () => {
+        const { props } = render({
+            rows: [{ id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-02", frozen: true }],
+        });
+
+        expect(props.tasks[0].isLocked).toBe(false);
+    });
+
+    it("rebuilds the task list when only the lock changes", () => {
+        const control = new GanttControl();
+        const notify = vi.fn();
+        const rows = [{ id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-02", frozen: false }];
+        const { context } = mockContext({ rows, settings: { lockedField: "frozen" } });
+
+        control.init(context, notify);
+        const before = renderAgain(control, context).tasks;
+
+        rows[0].frozen = true;
+        const after = renderAgain(control, context).tasks;
+
+        expect(before[0].isLocked).toBe(false);
+        expect(after[0].isLocked).toBe(true);
+        expect(after).not.toBe(before);
     });
 
     it("loads the next page only when one exists and nothing is loading", () => {

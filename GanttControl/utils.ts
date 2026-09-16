@@ -1,4 +1,14 @@
-import { Density, GanttRow, GanttSelection, GanttTask, Timeline, TimelineBand, TimelineTick, TimeScale } from "./types";
+import {
+    Density,
+    DragMode,
+    GanttRow,
+    GanttSelection,
+    GanttTask,
+    Timeline,
+    TimelineBand,
+    TimelineTick,
+    TimeScale,
+} from "./types";
 
 const MS_PER_DAY = 86400000;
 
@@ -187,6 +197,9 @@ function buildRowUnits(tasks: GanttTask[]): RowUnits {
             colorKey: colorKeys.size === 1 ? segments[0].colorKey : null,
             rowKey: first.rowKey,
             rowTitle: null,
+            // The synthesised task is never drawn as a bar, so this only speaks
+            // for the row as a whole: locked once every record on it is.
+            isLocked: segments.every((segment) => segment.isLocked),
         };
 
         units[index] = merged;
@@ -615,6 +628,97 @@ export function barGeometry(start: Date, end: Date, timeline: Timeline): { left:
 
     const left = instantToOffset(start, timeline);
     return { left, width: Math.max(8, instantToOffset(exclusiveEnd(end), timeline) - left) };
+}
+
+/** Days in an average Gregorian year's month, used to scale a drag at month zoom. */
+const DAYS_PER_MONTH = 30.4375;
+
+/**
+ * How many pixels one day takes at the current zoom. Exact on the day and week
+ * scales; a month column stands for an average month, so a drag there lands
+ * within a day of where the preview showed it, which is finer than that zoom
+ * can draw anyway.
+ */
+export function pixelsPerDay(timeline: Timeline): number {
+    if (timeline.scale === "day") {
+        return timeline.columnWidth;
+    }
+
+    return timeline.scale === "week" ? timeline.columnWidth / 7 : timeline.columnWidth / DAYS_PER_MONTH;
+}
+
+/**
+ * A horizontal drag in pixels as whole days. Edits snap to the day whatever the
+ * zoom, which is what keeps a task's time of day — and a date-only task's lack
+ * of one — intact across a move.
+ */
+export function offsetToDays(offset: number, timeline: Timeline): number {
+    return Math.round(offset / pixelsPerDay(timeline));
+}
+
+/**
+ * The days a drag is actually allowed, held back so that resizing cannot pull
+ * one endpoint past the other. A task may be a single day, never less.
+ */
+export function clampDragDays(start: Date, end: Date, mode: DragMode, days: number): number {
+    if (mode === "move") {
+        return days;
+    }
+
+    const span = diffInDays(start, end);
+    return mode === "start" ? Math.min(days, span) : Math.max(days, -span);
+}
+
+/** The dates a task takes after a drag of `days`, each keeping its time of day. */
+export function applyDrag(start: Date, end: Date, mode: DragMode, days: number): { start: Date; end: Date } {
+    const moved = clampDragDays(start, end, mode, days);
+
+    if (mode === "move") {
+        return { start: addDays(start, moved), end: addDays(end, moved) };
+    }
+
+    return mode === "start" ? { start: addDays(start, moved), end } : { start, end: addDays(end, moved) };
+}
+
+/**
+ * An instant as ISO 8601 in local time with its UTC offset, e.g.
+ * 2026-09-20T09:00:00+08:00.
+ *
+ * Deliberately not `toISOString`, which normalises to UTC: a date-only task at
+ * local midnight would be written as the previous day east of UTC, and a maker
+ * reading the value — or storing it in a date-only column — would see a task
+ * land a day early. Writing the wall clock the user actually dragged to, with
+ * the offset alongside it, keeps both readings right.
+ */
+export function toLocalIso(date: Date): string {
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const offsetInMinutes = -date.getTimezoneOffset();
+    const sign = offsetInMinutes < 0 ? "-" : "+";
+    const offset = Math.abs(offsetInMinutes);
+
+    return (
+        `${String(date.getFullYear()).padStart(4, "0")}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+        `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}` +
+        `${sign}${pad(Math.floor(offset / 60))}:${pad(offset % 60)}`
+    );
+}
+
+/**
+ * The task list as the chart draws it while edits are in flight: a dragged task
+ * carries its new dates until the host's save comes back through the dataset.
+ */
+export function applyPendingEdits(
+    tasks: GanttTask[],
+    edits: ReadonlyMap<string, { start: Date; end: Date }>
+): GanttTask[] {
+    if (edits.size === 0) {
+        return tasks;
+    }
+
+    return tasks.map((task) => {
+        const edit = edits.get(task.id);
+        return edit ? { ...task, start: edit.start, end: edit.end } : task;
+    });
 }
 
 export type TaskStatus = "notStarted" | "onTrack" | "atRisk" | "overdue" | "complete";

@@ -2,8 +2,8 @@ import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import * as React from "react";
 import { GanttChart } from "./components/GanttChart";
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
-import { ColorMode, Density, GanttTask, TimeScale } from "./types";
-import { exclusiveEnd, startOfDay } from "./utils";
+import { ColorMode, Density, EditPermissions, GanttTask, TaskEdit, TimeScale } from "./types";
+import { exclusiveEnd, startOfDay, toLocalIso } from "./utils";
 
 type DatasetRecord = ComponentFramework.PropertyHelper.DataSetApi.EntityRecord;
 
@@ -70,6 +70,9 @@ function toText(value: unknown): string | null {
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
+/** Values a flag column can carry that mean "no", whatever the host's data type. */
+const FALSEY = new Set(["false", "no", "n", "0", "off", "unlocked"]);
+
 /** Whether two builds of the task list describe the same records, field for field. */
 function sameTasks(previous: GanttTask[], next: GanttTask[]): boolean {
     if (previous.length !== next.length) {
@@ -89,7 +92,8 @@ function sameTasks(previous: GanttTask[], next: GanttTask[]): boolean {
             was.category === task.category &&
             was.colorKey === task.colorKey &&
             was.rowKey === task.rowKey &&
-            was.rowTitle === task.rowTitle
+            was.rowTitle === task.rowTitle &&
+            was.isLocked === task.isLocked
         );
     });
 }
@@ -112,6 +116,19 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
     /** The dataset from the current updateView, so the handlers below can stay stable. */
     private dataset: ComponentFramework.PropertyTypes.DataSet | undefined;
     private tasks: GanttTask[] = [];
+    /** Kept between updates so the chart's rows are not re-rendered by an identical object. */
+    private canEdit: EditPermissions = { move: false, resize: false };
+    /**
+     * The last edit the user made, as JSON, for the host to save. The control
+     * never writes to the dataset itself, so this is the whole of the write
+     * path. Blank until the first edit.
+     */
+    private lastEdit = "";
+    /**
+     * Counts edits. A host only reacts to an output that differs, so without a
+     * stamp in the JSON, dragging a bar back where it was would reach nobody.
+     */
+    private changeStamp = 0;
 
     public init(context: ComponentFramework.Context<IInputs>, notifyOutputChanged: () => void): void {
         this.notifyOutputChanged = notifyOutputChanged;
@@ -154,6 +171,7 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             showCurrentTime: this.readBoolean(context, "showCurrentTime", true),
             showProgress: this.readBoolean(context, "showProgress", true),
             showLegend: this.readBoolean(context, "showLegend", true),
+            canEdit: this.readPermissions(context),
             isLoading: dataset.loading,
             hasNextPage: Boolean(paging && paging.hasNextPage),
             width: context.mode.allocatedWidth > 0 ? context.mode.allocatedWidth : 0,
@@ -163,6 +181,7 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             onSelect: this.handleSelect,
             onSelectRow: this.handleSelectRow,
             onOpen: this.handleOpen,
+            onEdit: this.handleEdit,
             onLoadMore: this.handleLoadMore,
             start: this.readBoundary(context.parameters.start),
             end: this.readBoundary(context.parameters.end),
@@ -200,6 +219,30 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
         }
     };
 
+    /**
+     * Publishes a drag for the host to save. Nothing is written here: a canvas
+     * app patches the record from OnChange, and a model-driven form does the
+     * same from its own handler. The chart has already drawn the edit and will
+     * let that drawing go once the records come back.
+     */
+    private readonly handleEdit = (edit: TaskEdit): void => {
+        this.changeStamp += 1;
+
+        // One JSON value rather than a property per part, so the app parses it
+        // once and switches on the action. Keys are ordered as a reader would
+        // want them: what happened, to what, and what it became.
+        this.lastEdit = JSON.stringify({
+            stamp: this.changeStamp,
+            action: edit.action,
+            taskId: edit.taskId,
+            title: edit.title,
+            start: toLocalIso(edit.start),
+            end: toLocalIso(edit.end),
+        });
+
+        this.notifyOutputChanged();
+    };
+
     private readonly handleLoadMore = (): void => {
         const paging = this.dataset?.paging;
 
@@ -231,7 +274,31 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
     }
 
     public getOutputs(): IOutputs {
-        return { selectedTaskId: this.selectedTaskId, selectedRowId: this.selectedRowId };
+        return {
+            selectedTaskId: this.selectedTaskId,
+            selectedRowId: this.selectedRowId,
+            lastEdit: this.lastEdit,
+        };
+    }
+
+    /**
+     * The editing gestures the maker has turned on. The same object is handed
+     * back while the settings hold, since a fresh one would re-render every
+     * visible row on each update.
+     */
+    private readPermissions(context: ComponentFramework.Context<IInputs>): EditPermissions {
+        const next: EditPermissions = {
+            move: this.readBoolean(context, "allowMove", false),
+            resize: this.readBoolean(context, "allowResize", false),
+        };
+        const current = this.canEdit;
+
+        if (current.move === next.move && current.resize === next.resize) {
+            return current;
+        }
+
+        this.canEdit = next;
+        return next;
     }
 
     public destroy(): void {
@@ -268,6 +335,7 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
         // Colouring falls back to the category, so the common "colour by
         // category" case needs no second setting.
         const colorField = field("colorField", "");
+        const lockedField = field("lockedField", "");
         // Grouping is switched off by blanking the row key, so no record shares a row.
         const groupRows = this.readBoolean(context, "groupRows", true);
         const rowField = groupRows ? field("rowField", "") : unset;
@@ -322,6 +390,7 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
                 colorKey: this.readText(record, colorField) ?? category,
                 rowKey,
                 rowTitle: this.readText(record, rowTitleField),
+                isLocked: this.readFlag(record, lockedField),
             });
         }
 
@@ -399,6 +468,7 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             ["parentField", "Parent field", ""],
             ["categoryField", "Category field", ""],
             ["colorField", "Colour field", ""],
+            ["lockedField", "Locked field", ""],
             ["rowField", "Row field", ""],
             ["rowTitleField", "Row title field", ""],
         ];
@@ -562,5 +632,38 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
 
         const parsed = Number(value);
         return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    /**
+     * A record's value read as a yes/no. Columns that mean "yes" arrive in as
+     * many shapes as the hosts allow: a Dataverse two-options column as a
+     * boolean, a choice as its formatted label, a CSV in the test harness as
+     * text. Anything the list below does not recognise as "no" counts as yes,
+     * since a column named for a flag having a value at all is the signal.
+     */
+    private readFlag(record: DatasetRecord, field: FieldRef): boolean {
+        if (!field.column) {
+            return false;
+        }
+
+        const value = this.readValue(record, field);
+
+        if (value === null || value === undefined || value === "") {
+            return false;
+        }
+
+        if (typeof value === "boolean") {
+            return value;
+        }
+
+        if (typeof value === "number") {
+            return value !== 0;
+        }
+
+        return !FALSEY.has(
+            String(this.readText(record, field) ?? value)
+                .trim()
+                .toLowerCase()
+        );
     }
 }

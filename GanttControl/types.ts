@@ -14,11 +14,13 @@ export interface GanttTask {
     parentId: string | null;
     category: string | null;
     /** The value the colour scheme matches on, when colouring by a field. */
-    colorKey: string | null;
+    colorKey?: string | null;
     /** Tasks sharing a row key are drawn as separate bars on a single row. */
     rowKey: string | null;
     /** Label for the merged row this task belongs to; the row key is shown when absent. */
     rowTitle: string | null;
+    /** True when the record refuses to be moved or resized, whatever the maker has allowed. */
+    isLocked: boolean;
 }
 
 /** A task placed in the hierarchy, flattened back out for rendering. */
@@ -51,6 +53,32 @@ export type RowSelection = "none" | "row" | "task";
 export interface GanttSelection {
     taskId?: string;
     rowId?: string;
+}
+
+/** Which end of a bar a drag has hold of. "move" carries the whole bar. */
+export type DragMode = "move" | "start" | "end";
+
+/** What a drag did to the record's dates, as published to the host. */
+export type EditAction = "move" | "resize";
+
+/**
+ * One edit the user made, ready for the host to save. The control never writes
+ * to the dataset itself: it publishes the edit and draws it straight away,
+ * holding that drawing only until the host's save comes back through the data.
+ */
+export interface TaskEdit {
+    action: EditAction;
+    taskId: string;
+    /** Carried so the app can name the record it is saving without looking it up. */
+    title: string;
+    start: Date;
+    end: Date;
+}
+
+/** Which editing gestures the maker has turned on. */
+export interface EditPermissions {
+    move: boolean;
+    resize: boolean;
 }
 
 /** One column of the timeline, in scale-dependent units (a day, a week or a month). */
@@ -102,6 +130,8 @@ export interface GanttChartProps {
     showCurrentTime: boolean;
     showProgress: boolean;
     showLegend: boolean;
+    /** Whether the user may move or resize a bar. Both off leaves the chart read-only. */
+    canEdit: EditPermissions;
     isLoading: boolean;
     hasNextPage: boolean;
     /** Allocated size from the host; 0 means "not constrained, fill the parent". */
@@ -112,6 +142,8 @@ export interface GanttChartProps {
     /** Selects a whole row rather than one of the records drawn on it. */
     onSelectRow: (rowId: string | undefined) => void;
     onOpen: (taskId: string) => void;
+    /** A completed drag, for the host to save. */
+    onEdit: (edit: TaskEdit) => void;
     onLoadMore: () => void;
     /** Timeline boundary as a timestamp; undefined falls back to the earliest task start. */
     start?: number;

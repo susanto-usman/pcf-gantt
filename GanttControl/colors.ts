@@ -316,7 +316,7 @@ export function parseLegend(text: string | null | undefined): LegendItem[] {
 export function buildColorScheme(
     mode: ColorMode,
     legend: string | null | undefined,
-    tasks: readonly { colorKey: string | null }[]
+    tasks: readonly { colorKey?: string | null }[]
 ): ColorScheme {
     const authored = parseLegend(legend);
     return mode === "field" ? fieldScheme(authored, tasks) : statusScheme(authored);
@@ -349,7 +349,7 @@ function statusScheme(authored: LegendItem[]): ColorScheme {
     };
 }
 
-function fieldScheme(authored: LegendItem[], tasks: readonly { colorKey: string | null }[]): ColorScheme {
+function fieldScheme(authored: LegendItem[], tasks: readonly { colorKey?: string | null }[]): ColorScheme {
     const byKey = new Map<string, LegendItem>();
     const items: LegendItem[] = [];
     let fallback = authored.find((item) => item.key === "");

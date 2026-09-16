@@ -18,6 +18,7 @@
     <property name="rowTitleField" display-name-key="Row title field" description-key="Optional field name used to label a grouped row, so rows can be grouped by one value (e.g. employee.id) and shown by another (e.g. employee.name). Falls back to the Row field value." of-type="SingleLine.Text" usage="input" required="false" />
     <property name="categoryField" display-name-key="Category field" description-key="Optional field name used to group tasks; shown in the tooltip." of-type="SingleLine.Text" usage="input" required="false" />
     <property name="colorField" display-name-key="Colour field" description-key="Optional field name whose value picks a bar's colour when Colour by is set to the colour field. Falls back to the Category field." of-type="SingleLine.Text" usage="input" required="false" />
+    <property name="lockedField" display-name-key="Locked field" description-key="Optional field name marking records that may not be rescheduled. A record whose value is true, yes or any non-zero number cannot be moved or resized, whatever Allow move and Allow resize say. Blank, false, no and 0 leave it editable." of-type="SingleLine.Text" usage="input" required="false" />
 
     <property name="density" display-name-key="Density" description-key="Row density of the chart." of-type="Enum" usage="input" required="false" default-value="comfortable">
       <value name="comfortable" display-name-key="Detailed" description-key="Taller rows with start, finish and progress columns.">comfortable</value>
@@ -43,8 +44,13 @@
     <property name="showProgress" display-name-key="Show progress" description-key="Fills each bar in proportion to its progress value." of-type="TwoOptions" usage="input" required="false" default-value="true" />
     <property name="showLegend" display-name-key="Show legend" description-key="Shows the colour legend along the bottom of the chart." of-type="TwoOptions" usage="input" required="false" default-value="true" />
 
+    <property name="allowMove" display-name-key="Allow move" description-key="Lets a user drag a bar along the timeline to reschedule it, keeping its duration. The control does not save the change: it publishes it through the Last edit property and your app writes it back." of-type="TwoOptions" usage="input" required="false" default-value="false" />
+    <property name="allowResize" display-name-key="Allow resize" description-key="Lets a user drag either end of a bar to change when it starts or finishes. Published the same way as Allow move; a rolled-up parent bar is never resizable, as its span comes from its children." of-type="TwoOptions" usage="input" required="false" default-value="false" />
+
     <property name="selectedTaskId" display-name-key="Selected task" description-key="The taskId of the bar the user selected. Empty while a row is selected." of-type="SingleLine.Text" usage="bound" required="false" />
     <property name="selectedRowId" display-name-key="Selected row" description-key="The row the user selected: the Row field value when rows are grouped, otherwise the taskId of the row. Empty while a bar is selected." of-type="SingleLine.Text" usage="bound" required="false" />
+
+    <property name="lastEdit" display-name-key="Last edit" description-key="The last move or resize, as JSON: {&quot;stamp&quot;:1,&quot;action&quot;:&quot;move&quot;,&quot;taskId&quot;:&quot;T-1&quot;,&quot;title&quot;:&quot;Mobilisation&quot;,&quot;start&quot;:&quot;2026-09-20T09:00:00+08:00&quot;,&quot;end&quot;:&quot;2026-09-27T17:00:00+08:00&quot;}. Read it in OnChange with ParseJSON and switch on action. Stamp counts the edits, so repeating one — dragging a bar back where it was — still reaches OnChange. Blank until the first edit." of-type="SingleLine.Text" usage="output" required="false" />
 
     <resources>
       <code path="index.ts" order="1" />
