@@ -17,6 +17,12 @@
 // endpoints. parentId references the crew's title, which the control resolves
 // when it doesn't match a record id (as in the test harness).
 //
+// A handful of employees also pick up timed site tasks: several activities on
+// one day of a swing, written with real hours rather than midnight. On the day
+// scale those bars sit inside the column at their own times, and because they
+// share a row with the swing they cover, the ones whose hours genuinely clash
+// stack while the rest sit side by side in the same day.
+//
 // Usage: node sample-data/generate-roster.mjs [asOfDate]
 // asOfDate (YYYY-MM-DD, default today's date) drives the progress column.
 // Output is deterministic: the same asOfDate always produces the same file.
@@ -25,8 +31,10 @@ import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const RANGE_START = addDays(new Date(), -14); // 14 days ago, so the first swing is already underway
-const RANGE_END = addDays(new Date(), 180); // six months from now, so the last swing is still underway
+// Midnight: a swing means whole days, and now that the time of day survives
+// into the file, the clock the generator happened to run at must not ride along.
+const RANGE_START = startOfDay(addDays(new Date(), -14)); // 14 days ago, so the first swing is already underway
+const RANGE_END = startOfDay(addDays(new Date(), 180)); // six months from now, so the last swing is still underway
 const AS_OF = parseDate(process.argv[2] ?? new Date().toISOString().split("T")[0]);
 const EMPLOYEE_COUNT = 100;
 
@@ -159,10 +167,40 @@ const LAST_NAMES = [
     "Fernandes",
 ];
 
+// A day's work on site, in local hours. Every set has a pair that runs at the
+// same time and a pair that does not, so one day shows both the stacking and
+// the side-by-side case.
+const TIMED_TASK_SETS = [
+    [
+        { title: "Pre-start toolbox talk", from: [6, 0], to: [6, 30] },
+        { title: "Crane lift - conveyor section", from: [7, 30], to: [11, 0] },
+        { title: "Confined space entry - transfer chute", from: [9, 0], to: [13, 0] },
+        { title: "Isolation permit close-out", from: [15, 30], to: [16, 30] },
+    ],
+    [
+        { title: "Gearbox change-out", from: [7, 0], to: [15, 0] },
+        { title: "Hot work permit - handrail repair", from: [10, 0], to: [12, 30] },
+        { title: "Scaffold handover inspection", from: [15, 0], to: [16, 0] },
+    ],
+    [
+        { title: "Shutdown planning meeting", from: [8, 0], to: [9, 30] },
+        { title: "Pump alignment check", from: [9, 0], to: [11, 30] },
+        { title: "Vibration survey", from: [13, 0], to: [14, 15] },
+    ],
+    [
+        { title: "Plant walkdown", from: [6, 45], to: [8, 0] },
+        { title: "Valve replacement - slurry line", from: [8, 30], to: [14, 30] },
+        { title: "Contractor induction", from: [11, 0], to: [12, 0] },
+        { title: "Handover to night crew", from: [17, 30], to: [18, 0] },
+    ],
+];
+
 const rng = mulberry32(20260701);
 // Separate stream, so adding overlapping leave leaves the rest of the roster
 // (names, rosters, swing dates) byte-for-byte what it was.
 const leaveRng = mulberry32(20260902);
+// Likewise for the timed tasks: their own stream keeps every other row put.
+const taskRng = mulberry32(20261104);
 
 const rows = [];
 const usedNames = new Set();
@@ -227,7 +265,9 @@ const fields = [
 const outDir = dirname(fileURLToPath(import.meta.url));
 
 const records = rows.map((row) => Object.fromEntries(fields.map((field) => [field, field in row ? row[field] : ""])));
-writeFileSync(join(outDir, "employee-roster.json"), JSON.stringify(records, null, 2) + "\n", "utf8");
+// Four-space, matching the repo's prettier settings, so regenerating the
+// sample leaves a diff of the rows that changed and nothing else.
+writeFileSync(join(outDir, "employee-roster.json"), JSON.stringify(records, null, 4) + "\n", "utf8");
 
 // CSV has no nested values, so employee is written as a JSON string in one column.
 const csvValue = (row, field) =>
@@ -243,9 +283,12 @@ writeFileSync(join(outDir, "employee-roster.csv"), csv + "\r\n", "utf8");
 
 const swingCount = rows.filter((row) => row.category === "Day shift" || row.category === "Night shift").length;
 const rosterSwitchers = new Set(rows.filter((row) => row.title === "Roster change").map((row) => row.employee.id)).size;
+const timedTasks = rows.filter((row) => row.category === "Site task");
+const timedTaskPeople = new Set(timedTasks.map((row) => row.employee.id)).size;
 console.log(
     `Wrote ${rows.length} rows (${EMPLOYEE_COUNT} employees, ${swingCount} swings, ` +
-        `${rosterSwitchers} on more than one roster) to employee-roster.json and employee-roster.csv in ${outDir}`
+        `${rosterSwitchers} on more than one roster, ${timedTasks.length} timed site tasks ` +
+        `across ${timedTaskPeople} employees) to employee-roster.json and employee-roster.csv in ${outDir}`
 );
 
 function buildAssignments(firstRoster, dayShiftOnly) {
@@ -297,8 +340,39 @@ function buildAssignments(firstRoster, dayShiftOnly) {
     });
 
     assignments.push(...buildOverlappingLeave(assignments));
+    assignments.push(...buildTimedTasks(assignments));
 
     return assignments;
+}
+
+// Several activities on one day of a swing, each with a start and finish time.
+// They land on the employee's row alongside the swing they sit inside, so the
+// day scale draws them within that day's column instead of over the whole of it.
+function buildTimedTasks(assignments) {
+    // Only for some of the roster: a site where everyone logs their hours this
+    // way would bury the swings the sample is mostly about.
+    if (taskRng() >= 0.14) {
+        return [];
+    }
+
+    // Day shifts only. A night shift runs past midnight, which is a second
+    // problem — a bar spanning two columns — and not the one shown here.
+    const swings = assignments.filter((row) => row.category === "Day shift" && diffDays(row.start, row.end) >= 1);
+    // Preferring a swing that has not finished puts the cluster near the
+    // current-time marker, where it is worth zooming to the day scale to see.
+    const swing = swings.find((row) => row.end >= AS_OF) ?? swings[swings.length - 1];
+
+    if (!swing) {
+        return [];
+    }
+
+    // The day itself: today when the swing is under way, its second day if not.
+    const day = AS_OF >= swing.start && AS_OF <= swing.end ? AS_OF : addDays(swing.start, 1);
+    const activities = TIMED_TASK_SETS[Math.floor(taskRng() * TIMED_TASK_SETS.length)];
+
+    return activities.map((activity) =>
+        makeRow(activity.title, "Site task", at(day, activity.from), at(day, activity.to), swing.shift, swing.roster)
+    );
 }
 
 // Leave that lands on top of a swing instead of replacing it: someone calls in
@@ -404,10 +478,24 @@ function csvCell(value) {
 }
 
 function formatDate(date) {
-    // Local-time ISO without a zone, so the control's setHours(0) can't shift
-    // a date into the neighbouring day for users west of UTC.
+    // Local-time ISO without a zone, so a date can't shift into the
+    // neighbouring day for users west of UTC. Midnight reads as a plain date;
+    // a timed task keeps its hours for the day scale to place in the column.
     const pad = (n) => String(n).padStart(2, "0");
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T00:00:00`;
+    const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    return `${day}T${pad(date.getHours())}:${pad(date.getMinutes())}:00`;
+}
+
+function startOfDay(date) {
+    const day = new Date(date);
+    day.setHours(0, 0, 0, 0);
+    return day;
+}
+
+function at(day, [hour, minute]) {
+    const moment = new Date(day);
+    moment.setHours(hour, minute, 0, 0);
+    return moment;
 }
 
 function parseDate(text) {

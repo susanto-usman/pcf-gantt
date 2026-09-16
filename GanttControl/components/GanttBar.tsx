@@ -10,7 +10,7 @@ import {
 import * as React from "react";
 import { cssVars, STATUS_LABELS, STATUS_TOKENS, useGanttStyles } from "../styles";
 import { GanttTask } from "../types";
-import { diffInDays, formatDate, TaskStatus } from "../utils";
+import { diffInDays, exclusiveEnd, formatDateTime, hasTimeOfDay, TaskStatus } from "../utils";
 
 export interface BarLayout {
     left: number;
@@ -119,15 +119,15 @@ export const GanttBar: React.FC<GanttBarProps> = ({
             )}
             <div className={styles.tooltipRow}>
                 <span className={styles.tooltipLabel}>Start</span>
-                <span>{formatDate(start)}</span>
+                <span>{formatDateTime(start)}</span>
             </div>
             <div className={styles.tooltipRow}>
                 <span className={styles.tooltipLabel}>Finish</span>
-                <span>{formatDate(end)}</span>
+                <span>{formatDateTime(end)}</span>
             </div>
             <div className={styles.tooltipRow}>
                 <span className={styles.tooltipLabel}>Duration</span>
-                <span>{formatDuration(diffInDays(start, end) + 1)}</span>
+                <span>{formatDuration(start, end)}</span>
             </div>
             <div className={styles.tooltipRow}>
                 <span className={styles.tooltipLabel}>Status</span>
@@ -154,10 +154,12 @@ export const GanttBar: React.FC<GanttBarProps> = ({
         </div>
     );
 
+    const spokenRange = `${formatDateTime(start)} to ${formatDateTime(end)}`;
+
     const shared = {
         role: "button" as const,
         tabIndex: -1,
-        "aria-label": `${rowLabel ? `${rowLabel}, ` : ""}${task.title}. ${formatDate(start)} to ${formatDate(end)}.${
+        "aria-label": `${rowLabel ? `${rowLabel}, ` : ""}${task.title}. ${spokenRange}.${
             showProgress ? ` ${progress} percent complete.` : ""
         } ${STATUS_LABELS[status]}.`,
         onClick: (event: React.MouseEvent) => {
@@ -243,6 +245,22 @@ export const GanttBar: React.FC<GanttBarProps> = ({
     );
 };
 
-function formatDuration(days: number): string {
-    return days === 1 ? "1 day" : `${days} days`;
+/** Whole days for a date-only task, elapsed time once either end carries one. */
+function formatDuration(start: Date, end: Date): string {
+    if (!hasTimeOfDay(start) && !hasTimeOfDay(end)) {
+        const days = diffInDays(start, end) + 1;
+        return days === 1 ? "1 day" : `${days} days`;
+    }
+
+    const minutes = Math.max(0, Math.round((exclusiveEnd(end).getTime() - start.getTime()) / 60000));
+    const units: [number, string][] = [
+        [Math.floor(minutes / 1440), "day"],
+        [Math.floor((minutes % 1440) / 60), "hr"],
+        [minutes % 60, "min"],
+    ];
+    const spoken = units
+        .filter(([value]) => value > 0)
+        .map(([value, unit]) => `${value} ${unit}${value === 1 ? "" : "s"}`);
+
+    return spoken.length > 0 ? spoken.join(" ") : "0 mins";
 }

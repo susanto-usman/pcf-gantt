@@ -20,6 +20,9 @@ Swing 5 - Day shift,2026-12-17T00:00:00,2026-12-30T00:00:00,0,Mechanical Crew,Da
 Swing 6 - Night shift,2027-01-14T00:00:00,2027-01-27T00:00:00,0,Mechanical Crew,Night shift,"{""id"":""E1002"",""name"":""Cooper Davis""}",Millwright,Mechanical,14/14 FIFO,Night
 Swing 7 - Day shift,2027-02-11T00:00:00,2027-02-24T00:00:00,0,Mechanical Crew,Day shift,"{""id"":""E1002"",""name"":""Cooper Davis""}",Millwright,Mechanical,14/14 FIFO,Day
 Swing 8 - Night shift,2027-03-11T00:00:00,2027-03-15T00:00:00,0,Mechanical Crew,Night shift,"{""id"":""E1002"",""name"":""Cooper Davis""}",Millwright,Mechanical,14/14 FIFO,Night
+Shutdown planning meeting,2026-09-25T08:00:00,2026-09-25T09:30:00,0,Mechanical Crew,Site task,"{""id"":""E1002"",""name"":""Cooper Davis""}",Millwright,Mechanical,14/14 FIFO,Day
+Pump alignment check,2026-09-25T09:00:00,2026-09-25T11:30:00,0,Mechanical Crew,Site task,"{""id"":""E1002"",""name"":""Cooper Davis""}",Millwright,Mechanical,14/14 FIFO,Day
+Vibration survey,2026-09-25T13:00:00,2026-09-25T14:15:00,0,Mechanical Crew,Site task,"{""id"":""E1002"",""name"":""Cooper Davis""}",Millwright,Mechanical,14/14 FIFO,Day
 Swing 1 - Day shift,2026-09-02T00:00:00,2026-09-14T00:00:00,100,Mechanical Crew,Day shift,"{""id"":""E1003"",""name"":""Leila Mensah""}",Leading Hand Fitter,Mechanical,14/14 FIFO,Day
 Swing 2 - Night shift,2026-09-29T00:00:00,2026-10-12T00:00:00,0,Mechanical Crew,Night shift,"{""id"":""E1003"",""name"":""Leila Mensah""}",Leading Hand Fitter,Mechanical,14/14 FIFO,Night
 Swing 3 - Day shift,2026-10-27T00:00:00,2026-11-09T00:00:00,0,Mechanical Crew,Day shift,"{""id"":""E1003"",""name"":""Leila Mensah""}",Leading Hand Fitter,Mechanical,14/14 FIFO,Day
@@ -64,6 +67,9 @@ Swing 11 - Night shift,2027-01-22T00:00:00,2027-01-28T00:00:00,0,Mechanical Crew
 Swing 12 - Day shift,2027-02-05T00:00:00,2027-02-11T00:00:00,0,Mechanical Crew,Day shift,"{""id"":""E1006"",""name"":""Zoe White""}",Mechanical Fitter,Mechanical,7/7 DIDO,Day
 Swing 13 - Night shift,2027-02-19T00:00:00,2027-02-25T00:00:00,0,Mechanical Crew,Night shift,"{""id"":""E1006"",""name"":""Zoe White""}",Mechanical Fitter,Mechanical,7/7 DIDO,Night
 Swing 14 - Day shift,2027-03-05T00:00:00,2027-03-11T00:00:00,0,Mechanical Crew,Day shift,"{""id"":""E1006"",""name"":""Zoe White""}",Mechanical Fitter,Mechanical,7/7 DIDO,Day
+Shutdown planning meeting,2026-09-19T08:00:00,2026-09-19T09:30:00,0,Mechanical Crew,Site task,"{""id"":""E1006"",""name"":""Zoe White""}",Mechanical Fitter,Mechanical,7/7 DIDO,Day
+Pump alignment check,2026-09-19T09:00:00,2026-09-19T11:30:00,0,Mechanical Crew,Site task,"{""id"":""E1006"",""name"":""Zoe White""}",Mechanical Fitter,Mechanical,7/7 DIDO,Day
+Vibration survey,2026-09-19T13:00:00,2026-09-19T14:15:00,0,Mechanical Crew,Site task,"{""id"":""E1006"",""name"":""Zoe White""}",Mechanical Fitter,Mechanical,7/7 DIDO,Day
 Swing 1 - Day shift,2026-09-02T00:00:00,2026-09-07T00:00:00,100,Mechanical Crew,Day shift,"{""id"":""E1007"",""name"":""Harper Anderson""}",Mechanical Fitter,Mechanical,8/6 FIFO,Day
 Swing 2 - Night shift,2026-09-14T00:00:00,2026-09-21T00:00:00,38,Mechanical Crew,Night shift,"{""id"":""E1007"",""name"":""Harper Anderson""}",Mechanical Fitter,Mechanical,8/6 FIFO,Night
 Swing 3 - Day shift,2026-09-28T00:00:00,2026-10-05T00:00:00,0,Mechanical Crew,Day shift,"{""id"":""E1007"",""name"":""Harper Anderson""}",Mechanical Fitter,Mechanical,8/6 FIFO,Day
@@ -79,7 +85,7 @@ Swing 12 - Night shift,2027-02-01T00:00:00,2027-02-08T00:00:00,0,Mechanical Crew
 Swing 13 - Day shift,2027-02-15T00:00:00,2027-02-22T00:00:00,0,Mechanical Crew,Day shift,"{""id"":""E1007"",""name"":""Harper Anderson""}",Mechanical Fitter,Mechanical,8/6 FIFO,Day
 Swing 14 - Night shift,2027-03-01T00:00:00,2027-03-08T00:00:00,0,Mechanical Crew,Night shift,"{""id"":""E1007"",""name"":""Harper Anderson""}",Mechanical Fitter,Mechanical,8/6 FIFO,Night
 Swing 15 - Day shift,2027-03-15T00:00:00,2027-03-15T00:00:00,0,Mechanical Crew,Day shift,"{""id"":""E1007"",""name"":""Harper Anderson""}",Mechanical Fitter,Mechanical,8/6 FIFO,Day
-Sick leave,2026-09-16T00:00:00,2026-09-16T00:00:00,0,Mechanical Crew,Leave,"{""id"":""E1007"",""name"":""Harper Anderson""}",Mechanical Fitter,Mechanical,8/6 FIFO,
+Sick leave,2026-09-16T00:00:00,2026-09-16T00:00:00,100,Mechanical Crew,Leave,"{""id"":""E1007"",""name"":""Harper Anderson""}",Mechanical Fitter,Mechanical,8/6 FIFO,
 Swing 1 - Day shift,2026-09-02T00:00:00,2026-09-05T00:00:00,100,Mechanical Crew,Day shift,"{""id"":""E1008"",""name"":""Riley Smith""}",Mechanical Fitter,Mechanical,14/14 FIFO,Day
 Swing 2 - Night shift,2026-09-20T00:00:00,2026-10-03T00:00:00,0,Mechanical Crew,Night shift,"{""id"":""E1008"",""name"":""Riley Smith""}",Mechanical Fitter,Mechanical,14/14 FIFO,Night
 Swing 3 - Day shift,2026-10-18T00:00:00,2026-10-31T00:00:00,0,Mechanical Crew,Day shift,"{""id"":""E1008"",""name"":""Riley Smith""}",Mechanical Fitter,Mechanical,14/14 FIFO,Day
@@ -89,7 +95,7 @@ Swing 6 - Night shift,2027-01-10T00:00:00,2027-01-23T00:00:00,0,Mechanical Crew,
 Swing 7 - Day shift,2027-02-07T00:00:00,2027-02-20T00:00:00,0,Mechanical Crew,Day shift,"{""id"":""E1008"",""name"":""Riley Smith""}",Mechanical Fitter,Mechanical,14/14 FIFO,Day
 Swing 8 - Night shift,2027-03-07T00:00:00,2027-03-15T00:00:00,0,Mechanical Crew,Night shift,"{""id"":""E1008"",""name"":""Riley Smith""}",Mechanical Fitter,Mechanical,14/14 FIFO,Night
 Sick leave,2027-02-19T00:00:00,2027-02-19T00:00:00,0,Mechanical Crew,Leave,"{""id"":""E1008"",""name"":""Riley Smith""}",Mechanical Fitter,Mechanical,14/14 FIFO,
-Swing 1 - Night shift,2026-09-16T00:00:00,2026-09-29T00:00:00,0,Mechanical Crew,Night shift,"{""id"":""E1009"",""name"":""Oliver Hall""}",Mechanical Fitter,Mechanical,14/14 FIFO,Night
+Swing 1 - Night shift,2026-09-16T00:00:00,2026-09-29T00:00:00,7,Mechanical Crew,Night shift,"{""id"":""E1009"",""name"":""Oliver Hall""}",Mechanical Fitter,Mechanical,14/14 FIFO,Night
 Swing 2 - Day shift,2026-10-14T00:00:00,2026-10-27T00:00:00,0,Mechanical Crew,Day shift,"{""id"":""E1009"",""name"":""Oliver Hall""}",Mechanical Fitter,Mechanical,14/14 FIFO,Day
 Swing 3 - Night shift,2026-11-11T00:00:00,2026-11-24T00:00:00,0,Mechanical Crew,Night shift,"{""id"":""E1009"",""name"":""Oliver Hall""}",Mechanical Fitter,Mechanical,14/14 FIFO,Night
 Swing 4 - Day shift,2026-12-09T00:00:00,2026-12-22T00:00:00,0,Mechanical Crew,Day shift,"{""id"":""E1009"",""name"":""Oliver Hall""}",Mechanical Fitter,Mechanical,14/14 FIFO,Day
@@ -123,7 +129,7 @@ Swing 27 - Day shift,2027-03-08T00:00:00,2027-03-12T00:00:00,0,Mechanical Crew,D
 Swing 28 - Day shift,2027-03-15T00:00:00,2027-03-15T00:00:00,0,Mechanical Crew,Day shift,"{""id"":""E1010"",""name"":""Hamish O'Brien""}",Millwright,Mechanical,5/2 Residential,Day
 Annual leave,2027-01-13T00:00:00,2027-01-21T00:00:00,0,Mechanical Crew,Leave,"{""id"":""E1010"",""name"":""Hamish O'Brien""}",Millwright,Mechanical,5/2 Residential,
 Swing 1 - Day shift,2026-09-02T00:00:00,2026-09-09T00:00:00,100,Mechanical Crew,Day shift,"{""id"":""E1011"",""name"":""Sophie Anderson""}",Millwright,Mechanical,8/6 FIFO,Day
-Annual leave,2026-09-16T00:00:00,2026-09-23T00:00:00,0,Mechanical Crew,Leave,"{""id"":""E1011"",""name"":""Sophie Anderson""}",Millwright,Mechanical,8/6 FIFO,
+Annual leave,2026-09-16T00:00:00,2026-09-23T00:00:00,13,Mechanical Crew,Leave,"{""id"":""E1011"",""name"":""Sophie Anderson""}",Millwright,Mechanical,8/6 FIFO,
 Swing 3 - Night shift,2026-09-30T00:00:00,2026-10-07T00:00:00,0,Mechanical Crew,Night shift,"{""id"":""E1011"",""name"":""Sophie Anderson""}",Millwright,Mechanical,8/6 FIFO,Night
 Swing 4 - Day shift,2026-10-14T00:00:00,2026-10-21T00:00:00,0,Mechanical Crew,Day shift,"{""id"":""E1011"",""name"":""Sophie Anderson""}",Millwright,Mechanical,8/6 FIFO,Day
 Swing 5 - Night shift,2026-10-28T00:00:00,2026-11-04T00:00:00,0,Mechanical Crew,Night shift,"{""id"":""E1011"",""name"":""Sophie Anderson""}",Millwright,Mechanical,8/6 FIFO,Night
@@ -317,9 +323,12 @@ Swing 5 - Day shift,2026-12-27T00:00:00,2027-01-09T00:00:00,0,Mechanical Crew,Da
 Swing 6 - Night shift,2027-01-24T00:00:00,2027-02-06T00:00:00,0,Mechanical Crew,Night shift,"{""id"":""E1025"",""name"":""Lucia Wang""}",Mechanical Fitter,Mechanical,14/14 FIFO,Night
 Swing 7 - Day shift,2027-02-21T00:00:00,2027-03-06T00:00:00,0,Mechanical Crew,Day shift,"{""id"":""E1025"",""name"":""Lucia Wang""}",Mechanical Fitter,Mechanical,14/14 FIFO,Day
 Sick leave,2027-01-29T00:00:00,2027-01-30T00:00:00,0,Mechanical Crew,Leave,"{""id"":""E1025"",""name"":""Lucia Wang""}",Mechanical Fitter,Mechanical,14/14 FIFO,
+Gearbox change-out,2026-09-16T07:00:00,2026-09-16T15:00:00,0,Mechanical Crew,Site task,"{""id"":""E1025"",""name"":""Lucia Wang""}",Mechanical Fitter,Mechanical,14/14 FIFO,Day
+Hot work permit - handrail repair,2026-09-16T10:00:00,2026-09-16T12:30:00,0,Mechanical Crew,Site task,"{""id"":""E1025"",""name"":""Lucia Wang""}",Mechanical Fitter,Mechanical,14/14 FIFO,Day
+Scaffold handover inspection,2026-09-16T15:00:00,2026-09-16T16:00:00,0,Mechanical Crew,Site task,"{""id"":""E1025"",""name"":""Lucia Wang""}",Mechanical Fitter,Mechanical,14/14 FIFO,Day
 Electrical & Instrumentation Crew,2026-09-02T00:00:00,2027-03-15T00:00:00,8,,Crew,,,Electrical & Instrumentation,,
 Swing 1 - Night shift,2026-09-02T00:00:00,2026-09-09T00:00:00,100,Electrical & Instrumentation Crew,Night shift,"{""id"":""E1026"",""name"":""Oliver O'Brien""}",Electrician,Electrical & Instrumentation,8/6 FIFO,Night
-Annual leave,2026-09-16T00:00:00,2026-09-23T00:00:00,0,Electrical & Instrumentation Crew,Leave,"{""id"":""E1026"",""name"":""Oliver O'Brien""}",Electrician,Electrical & Instrumentation,8/6 FIFO,
+Annual leave,2026-09-16T00:00:00,2026-09-23T00:00:00,13,Electrical & Instrumentation Crew,Leave,"{""id"":""E1026"",""name"":""Oliver O'Brien""}",Electrician,Electrical & Instrumentation,8/6 FIFO,
 Swing 3 - Day shift,2026-09-30T00:00:00,2026-10-07T00:00:00,0,Electrical & Instrumentation Crew,Day shift,"{""id"":""E1026"",""name"":""Oliver O'Brien""}",Electrician,Electrical & Instrumentation,8/6 FIFO,Day
 Swing 4 - Night shift,2026-10-14T00:00:00,2026-10-21T00:00:00,0,Electrical & Instrumentation Crew,Night shift,"{""id"":""E1026"",""name"":""Oliver O'Brien""}",Electrician,Electrical & Instrumentation,8/6 FIFO,Night
 Swing 5 - Day shift,2026-10-28T00:00:00,2026-11-04T00:00:00,0,Electrical & Instrumentation Crew,Day shift,"{""id"":""E1026"",""name"":""Oliver O'Brien""}",Electrician,Electrical & Instrumentation,8/6 FIFO,Day
@@ -490,6 +499,9 @@ Swing 25 - Day shift,2027-02-22T00:00:00,2027-02-26T00:00:00,0,Electrical & Inst
 Swing 26 - Day shift,2027-03-01T00:00:00,2027-03-05T00:00:00,0,Electrical & Instrumentation Crew,Day shift,"{""id"":""E1036"",""name"":""Charlotte Kovac""}",Instrument Technician,Electrical & Instrumentation,5/2 Residential,Day
 Swing 27 - Day shift,2027-03-08T00:00:00,2027-03-12T00:00:00,0,Electrical & Instrumentation Crew,Day shift,"{""id"":""E1036"",""name"":""Charlotte Kovac""}",Instrument Technician,Electrical & Instrumentation,5/2 Residential,Day
 Swing 28 - Day shift,2027-03-15T00:00:00,2027-03-15T00:00:00,0,Electrical & Instrumentation Crew,Day shift,"{""id"":""E1036"",""name"":""Charlotte Kovac""}",Instrument Technician,Electrical & Instrumentation,5/2 Residential,Day
+Gearbox change-out,2026-09-16T07:00:00,2026-09-16T15:00:00,0,Electrical & Instrumentation Crew,Site task,"{""id"":""E1036"",""name"":""Charlotte Kovac""}",Instrument Technician,Electrical & Instrumentation,5/2 Residential,Day
+Hot work permit - handrail repair,2026-09-16T10:00:00,2026-09-16T12:30:00,0,Electrical & Instrumentation Crew,Site task,"{""id"":""E1036"",""name"":""Charlotte Kovac""}",Instrument Technician,Electrical & Instrumentation,5/2 Residential,Day
+Scaffold handover inspection,2026-09-16T15:00:00,2026-09-16T16:00:00,0,Electrical & Instrumentation Crew,Site task,"{""id"":""E1036"",""name"":""Charlotte Kovac""}",Instrument Technician,Electrical & Instrumentation,5/2 Residential,Day
 Swing 1 - Day shift,2026-09-04T00:00:00,2026-09-11T00:00:00,100,Electrical & Instrumentation Crew,Day shift,"{""id"":""E1037"",""name"":""Harper Williams""}",Electrician,Electrical & Instrumentation,8/6 FIFO,Day
 Swing 2 - Night shift,2026-09-18T00:00:00,2026-09-25T00:00:00,0,Electrical & Instrumentation Crew,Night shift,"{""id"":""E1037"",""name"":""Harper Williams""}",Electrician,Electrical & Instrumentation,8/6 FIFO,Night
 Swing 3 - Day shift,2026-10-02T00:00:00,2026-10-09T00:00:00,0,Electrical & Instrumentation Crew,Day shift,"{""id"":""E1037"",""name"":""Harper Williams""}",Electrician,Electrical & Instrumentation,8/6 FIFO,Day
@@ -510,6 +522,10 @@ Swing 5 - Night shift,2026-12-29T00:00:00,2027-01-11T00:00:00,0,Electrical & Ins
 Annual leave,2027-01-26T00:00:00,2027-02-08T00:00:00,0,Electrical & Instrumentation Crew,Leave,"{""id"":""E1038"",""name"":""Evie Ngata""}",Electrician,Electrical & Instrumentation,14/14 FIFO,
 Swing 7 - Day shift,2027-02-23T00:00:00,2027-03-08T00:00:00,0,Electrical & Instrumentation Crew,Day shift,"{""id"":""E1038"",""name"":""Evie Ngata""}",Electrician,Electrical & Instrumentation,14/14 FIFO,Day
 Sick leave,2027-02-28T00:00:00,2027-02-28T00:00:00,0,Electrical & Instrumentation Crew,Leave,"{""id"":""E1038"",""name"":""Evie Ngata""}",Electrician,Electrical & Instrumentation,14/14 FIFO,
+Plant walkdown,2026-10-07T06:45:00,2026-10-07T08:00:00,0,Electrical & Instrumentation Crew,Site task,"{""id"":""E1038"",""name"":""Evie Ngata""}",Electrician,Electrical & Instrumentation,14/14 FIFO,Day
+Valve replacement - slurry line,2026-10-07T08:30:00,2026-10-07T14:30:00,0,Electrical & Instrumentation Crew,Site task,"{""id"":""E1038"",""name"":""Evie Ngata""}",Electrician,Electrical & Instrumentation,14/14 FIFO,Day
+Contractor induction,2026-10-07T11:00:00,2026-10-07T12:00:00,0,Electrical & Instrumentation Crew,Site task,"{""id"":""E1038"",""name"":""Evie Ngata""}",Electrician,Electrical & Instrumentation,14/14 FIFO,Day
+Handover to night crew,2026-10-07T17:30:00,2026-10-07T18:00:00,0,Electrical & Instrumentation Crew,Site task,"{""id"":""E1038"",""name"":""Evie Ngata""}",Electrician,Electrical & Instrumentation,14/14 FIFO,Day
 Swing 1 - Night shift,2026-09-02T00:00:00,2026-09-09T00:00:00,100,Electrical & Instrumentation Crew,Night shift,"{""id"":""E1039"",""name"":""William Ngata""}",E&I Leading Hand,Electrical & Instrumentation,21/7 FIFO,Night
 Swing 2 - Day shift,2026-09-17T00:00:00,2026-10-07T00:00:00,0,Electrical & Instrumentation Crew,Day shift,"{""id"":""E1039"",""name"":""William Ngata""}",E&I Leading Hand,Electrical & Instrumentation,21/7 FIFO,Day
 Swing 3 - Night shift,2026-10-15T00:00:00,2026-11-04T00:00:00,0,Electrical & Instrumentation Crew,Night shift,"{""id"":""E1039"",""name"":""William Ngata""}",E&I Leading Hand,Electrical & Instrumentation,21/7 FIFO,Night
@@ -520,6 +536,9 @@ Swing 6 - Day shift,2027-01-04T00:00:00,2027-01-17T00:00:00,0,Electrical & Instr
 Swing 7 - Night shift,2027-02-01T00:00:00,2027-02-14T00:00:00,0,Electrical & Instrumentation Crew,Night shift,"{""id"":""E1039"",""name"":""William Ngata""}",E&I Leading Hand,Electrical & Instrumentation,14/14 FIFO,Night
 Swing 8 - Day shift,2027-03-01T00:00:00,2027-03-14T00:00:00,0,Electrical & Instrumentation Crew,Day shift,"{""id"":""E1039"",""name"":""William Ngata""}",E&I Leading Hand,Electrical & Instrumentation,14/14 FIFO,Day
 Sick leave,2027-03-05T00:00:00,2027-03-07T00:00:00,0,Electrical & Instrumentation Crew,Leave,"{""id"":""E1039"",""name"":""William Ngata""}",E&I Leading Hand,Electrical & Instrumentation,14/14 FIFO,
+Shutdown planning meeting,2026-09-18T08:00:00,2026-09-18T09:30:00,0,Electrical & Instrumentation Crew,Site task,"{""id"":""E1039"",""name"":""William Ngata""}",E&I Leading Hand,Electrical & Instrumentation,21/7 FIFO,Day
+Pump alignment check,2026-09-18T09:00:00,2026-09-18T11:30:00,0,Electrical & Instrumentation Crew,Site task,"{""id"":""E1039"",""name"":""William Ngata""}",E&I Leading Hand,Electrical & Instrumentation,21/7 FIFO,Day
+Vibration survey,2026-09-18T13:00:00,2026-09-18T14:15:00,0,Electrical & Instrumentation Crew,Site task,"{""id"":""E1039"",""name"":""William Ngata""}",E&I Leading Hand,Electrical & Instrumentation,21/7 FIFO,Day
 Swing 1 - Night shift,2026-09-02T00:00:00,2026-09-03T00:00:00,100,Electrical & Instrumentation Crew,Night shift,"{""id"":""E1040"",""name"":""Chloe Fernandes""}",E&I Leading Hand,Electrical & Instrumentation,8/6 FIFO,Night
 Swing 2 - Day shift,2026-09-10T00:00:00,2026-09-17T00:00:00,88,Electrical & Instrumentation Crew,Day shift,"{""id"":""E1040"",""name"":""Chloe Fernandes""}",E&I Leading Hand,Electrical & Instrumentation,8/6 FIFO,Day
 Annual leave,2026-09-24T00:00:00,2026-10-01T00:00:00,0,Electrical & Instrumentation Crew,Leave,"{""id"":""E1040"",""name"":""Chloe Fernandes""}",E&I Leading Hand,Electrical & Instrumentation,8/6 FIFO,
@@ -553,6 +572,10 @@ Swing 5 - Night shift,2026-12-04T00:00:00,2026-12-24T00:00:00,0,Electrical & Ins
 Swing 6 - Day shift,2027-01-01T00:00:00,2027-01-21T00:00:00,0,Electrical & Instrumentation Crew,Day shift,"{""id"":""E1041"",""name"":""Arjun Taylor""}",Electrician,Electrical & Instrumentation,21/7 FIFO,Day
 Swing 7 - Night shift,2027-01-29T00:00:00,2027-02-18T00:00:00,0,Electrical & Instrumentation Crew,Night shift,"{""id"":""E1041"",""name"":""Arjun Taylor""}",Electrician,Electrical & Instrumentation,21/7 FIFO,Night
 Swing 8 - Day shift,2027-02-26T00:00:00,2027-03-15T00:00:00,0,Electrical & Instrumentation Crew,Day shift,"{""id"":""E1041"",""name"":""Arjun Taylor""}",Electrician,Electrical & Instrumentation,21/7 FIFO,Day
+Plant walkdown,2026-09-16T06:45:00,2026-09-16T08:00:00,0,Electrical & Instrumentation Crew,Site task,"{""id"":""E1041"",""name"":""Arjun Taylor""}",Electrician,Electrical & Instrumentation,21/7 FIFO,Day
+Valve replacement - slurry line,2026-09-16T08:30:00,2026-09-16T14:30:00,0,Electrical & Instrumentation Crew,Site task,"{""id"":""E1041"",""name"":""Arjun Taylor""}",Electrician,Electrical & Instrumentation,21/7 FIFO,Day
+Contractor induction,2026-09-16T11:00:00,2026-09-16T12:00:00,0,Electrical & Instrumentation Crew,Site task,"{""id"":""E1041"",""name"":""Arjun Taylor""}",Electrician,Electrical & Instrumentation,21/7 FIFO,Day
+Handover to night crew,2026-09-16T17:30:00,2026-09-16T18:00:00,0,Electrical & Instrumentation Crew,Site task,"{""id"":""E1041"",""name"":""Arjun Taylor""}",Electrician,Electrical & Instrumentation,21/7 FIFO,Day
 Site induction,2026-09-26T00:00:00,2026-09-26T00:00:00,0,Electrical & Instrumentation Crew,Induction,"{""id"":""E1042"",""name"":""Thomas Thompson""}",Electrician,Electrical & Instrumentation,21/7 FIFO,
 Swing 1 - Night shift,2026-09-27T00:00:00,2026-10-17T00:00:00,0,Electrical & Instrumentation Crew,Night shift,"{""id"":""E1042"",""name"":""Thomas Thompson""}",Electrician,Electrical & Instrumentation,21/7 FIFO,Night
 Swing 2 - Day shift,2026-10-25T00:00:00,2026-11-14T00:00:00,0,Electrical & Instrumentation Crew,Day shift,"{""id"":""E1042"",""name"":""Thomas Thompson""}",Electrician,Electrical & Instrumentation,21/7 FIFO,Day
@@ -690,6 +713,10 @@ Swing 5 - Day shift,2026-12-20T00:00:00,2027-01-09T00:00:00,0,Boilermakers & Wel
 Swing 6 - Night shift,2027-01-17T00:00:00,2027-02-06T00:00:00,0,Boilermakers & Welders Crew,Night shift,"{""id"":""E1053"",""name"":""Sophie Fernandes""}",Leading Hand Boilermaker,Boilermakers & Welders,21/7 FIFO,Night
 Swing 7 - Day shift,2027-02-14T00:00:00,2027-03-06T00:00:00,0,Boilermakers & Welders Crew,Day shift,"{""id"":""E1053"",""name"":""Sophie Fernandes""}",Leading Hand Boilermaker,Boilermakers & Welders,21/7 FIFO,Day
 Swing 8 - Night shift,2027-03-14T00:00:00,2027-03-15T00:00:00,0,Boilermakers & Welders Crew,Night shift,"{""id"":""E1053"",""name"":""Sophie Fernandes""}",Leading Hand Boilermaker,Boilermakers & Welders,21/7 FIFO,Night
+Pre-start toolbox talk,2026-09-16T06:00:00,2026-09-16T06:30:00,0,Boilermakers & Welders Crew,Site task,"{""id"":""E1053"",""name"":""Sophie Fernandes""}",Leading Hand Boilermaker,Boilermakers & Welders,21/7 FIFO,Day
+Crane lift - conveyor section,2026-09-16T07:30:00,2026-09-16T11:00:00,0,Boilermakers & Welders Crew,Site task,"{""id"":""E1053"",""name"":""Sophie Fernandes""}",Leading Hand Boilermaker,Boilermakers & Welders,21/7 FIFO,Day
+Confined space entry - transfer chute,2026-09-16T09:00:00,2026-09-16T13:00:00,0,Boilermakers & Welders Crew,Site task,"{""id"":""E1053"",""name"":""Sophie Fernandes""}",Leading Hand Boilermaker,Boilermakers & Welders,21/7 FIFO,Day
+Isolation permit close-out,2026-09-16T15:30:00,2026-09-16T16:30:00,0,Boilermakers & Welders Crew,Site task,"{""id"":""E1053"",""name"":""Sophie Fernandes""}",Leading Hand Boilermaker,Boilermakers & Welders,21/7 FIFO,Day
 Swing 1 - Day shift,2026-09-07T00:00:00,2026-09-11T00:00:00,100,Boilermakers & Welders Crew,Day shift,"{""id"":""E1054"",""name"":""Arjun Smith""}",Welder,Boilermakers & Welders,5/2 Residential,Day
 Swing 2 - Day shift,2026-09-14T00:00:00,2026-09-18T00:00:00,60,Boilermakers & Welders Crew,Day shift,"{""id"":""E1054"",""name"":""Arjun Smith""}",Welder,Boilermakers & Welders,5/2 Residential,Day
 Swing 3 - Day shift,2026-09-21T00:00:00,2026-09-25T00:00:00,0,Boilermakers & Welders Crew,Day shift,"{""id"":""E1054"",""name"":""Arjun Smith""}",Welder,Boilermakers & Welders,5/2 Residential,Day
@@ -728,6 +755,10 @@ Swing 6 - Day shift,2027-01-10T00:00:00,2027-01-23T00:00:00,0,Boilermakers & Wel
 Swing 7 - Night shift,2027-02-07T00:00:00,2027-02-20T00:00:00,0,Boilermakers & Welders Crew,Night shift,"{""id"":""E1055"",""name"":""Amara Smith""}",Boilermaker,Boilermakers & Welders,14/14 FIFO,Night
 Swing 8 - Day shift,2027-03-07T00:00:00,2027-03-15T00:00:00,0,Boilermakers & Welders Crew,Day shift,"{""id"":""E1055"",""name"":""Amara Smith""}",Boilermaker,Boilermakers & Welders,14/14 FIFO,Day
 Sick leave,2027-03-11T00:00:00,2027-03-13T00:00:00,0,Boilermakers & Welders Crew,Leave,"{""id"":""E1055"",""name"":""Amara Smith""}",Boilermaker,Boilermakers & Welders,14/14 FIFO,
+Plant walkdown,2026-11-16T06:45:00,2026-11-16T08:00:00,0,Boilermakers & Welders Crew,Site task,"{""id"":""E1055"",""name"":""Amara Smith""}",Boilermaker,Boilermakers & Welders,14/14 FIFO,Day
+Valve replacement - slurry line,2026-11-16T08:30:00,2026-11-16T14:30:00,0,Boilermakers & Welders Crew,Site task,"{""id"":""E1055"",""name"":""Amara Smith""}",Boilermaker,Boilermakers & Welders,14/14 FIFO,Day
+Contractor induction,2026-11-16T11:00:00,2026-11-16T12:00:00,0,Boilermakers & Welders Crew,Site task,"{""id"":""E1055"",""name"":""Amara Smith""}",Boilermaker,Boilermakers & Welders,14/14 FIFO,Day
+Handover to night crew,2026-11-16T17:30:00,2026-11-16T18:00:00,0,Boilermakers & Welders Crew,Site task,"{""id"":""E1055"",""name"":""Amara Smith""}",Boilermaker,Boilermakers & Welders,14/14 FIFO,Day
 Swing 1 - Day shift,2026-09-03T00:00:00,2026-09-16T00:00:00,100,Boilermakers & Welders Crew,Day shift,"{""id"":""E1056"",""name"":""Siobhan Smith""}",Coded Welder,Boilermakers & Welders,14/14 FIFO,Day
 Swing 2 - Night shift,2026-10-01T00:00:00,2026-10-14T00:00:00,0,Boilermakers & Welders Crew,Night shift,"{""id"":""E1056"",""name"":""Siobhan Smith""}",Coded Welder,Boilermakers & Welders,14/14 FIFO,Night
 Swing 3 - Day shift,2026-10-29T00:00:00,2026-11-11T00:00:00,0,Boilermakers & Welders Crew,Day shift,"{""id"":""E1056"",""name"":""Siobhan Smith""}",Coded Welder,Boilermakers & Welders,14/14 FIFO,Day
@@ -737,6 +768,10 @@ Swing 6 - Night shift,2027-01-21T00:00:00,2027-02-03T00:00:00,0,Boilermakers & W
 Swing 7 - Day shift,2027-02-18T00:00:00,2027-03-03T00:00:00,0,Boilermakers & Welders Crew,Day shift,"{""id"":""E1056"",""name"":""Siobhan Smith""}",Coded Welder,Boilermakers & Welders,14/14 FIFO,Day
 Sick leave,2026-10-07T00:00:00,2026-10-09T00:00:00,0,Boilermakers & Welders Crew,Leave,"{""id"":""E1056"",""name"":""Siobhan Smith""}",Coded Welder,Boilermakers & Welders,14/14 FIFO,
 Annual leave,2027-01-28T00:00:00,2027-02-06T00:00:00,0,Boilermakers & Welders Crew,Leave,"{""id"":""E1056"",""name"":""Siobhan Smith""}",Coded Welder,Boilermakers & Welders,14/14 FIFO,
+Plant walkdown,2026-09-16T06:45:00,2026-09-16T08:00:00,0,Boilermakers & Welders Crew,Site task,"{""id"":""E1056"",""name"":""Siobhan Smith""}",Coded Welder,Boilermakers & Welders,14/14 FIFO,Day
+Valve replacement - slurry line,2026-09-16T08:30:00,2026-09-16T14:30:00,0,Boilermakers & Welders Crew,Site task,"{""id"":""E1056"",""name"":""Siobhan Smith""}",Coded Welder,Boilermakers & Welders,14/14 FIFO,Day
+Contractor induction,2026-09-16T11:00:00,2026-09-16T12:00:00,0,Boilermakers & Welders Crew,Site task,"{""id"":""E1056"",""name"":""Siobhan Smith""}",Coded Welder,Boilermakers & Welders,14/14 FIFO,Day
+Handover to night crew,2026-09-16T17:30:00,2026-09-16T18:00:00,0,Boilermakers & Welders Crew,Site task,"{""id"":""E1056"",""name"":""Siobhan Smith""}",Coded Welder,Boilermakers & Welders,14/14 FIFO,Day
 Swing 1 - Night shift,2026-09-07T00:00:00,2026-09-11T00:00:00,100,Boilermakers & Welders Crew,Night shift,"{""id"":""E1057"",""name"":""William Jackson""}",Coded Welder,Boilermakers & Welders,5/2 Residential,Night
 Swing 2 - Night shift,2026-09-14T00:00:00,2026-09-18T00:00:00,60,Boilermakers & Welders Crew,Night shift,"{""id"":""E1057"",""name"":""William Jackson""}",Coded Welder,Boilermakers & Welders,5/2 Residential,Night
 Swing 3 - Night shift,2026-09-21T00:00:00,2026-09-25T00:00:00,0,Boilermakers & Welders Crew,Night shift,"{""id"":""E1057"",""name"":""William Jackson""}",Coded Welder,Boilermakers & Welders,5/2 Residential,Night
@@ -903,6 +938,10 @@ Swing 13 - Day shift,2027-02-15T00:00:00,2027-02-22T00:00:00,0,Rigging & Scaffol
 Swing 14 - Night shift,2027-03-01T00:00:00,2027-03-08T00:00:00,0,Rigging & Scaffolding Crew,Night shift,"{""id"":""E1070"",""name"":""Oliver Williams""}",Crane Operator,Rigging & Scaffolding,8/6 FIFO,Night
 Swing 15 - Day shift,2027-03-15T00:00:00,2027-03-15T00:00:00,0,Rigging & Scaffolding Crew,Day shift,"{""id"":""E1070"",""name"":""Oliver Williams""}",Crane Operator,Rigging & Scaffolding,8/6 FIFO,Day
 Sick leave,2027-02-16T00:00:00,2027-02-17T00:00:00,0,Rigging & Scaffolding Crew,Leave,"{""id"":""E1070"",""name"":""Oliver Williams""}",Crane Operator,Rigging & Scaffolding,8/6 FIFO,
+Plant walkdown,2026-09-29T06:45:00,2026-09-29T08:00:00,0,Rigging & Scaffolding Crew,Site task,"{""id"":""E1070"",""name"":""Oliver Williams""}",Crane Operator,Rigging & Scaffolding,8/6 FIFO,Day
+Valve replacement - slurry line,2026-09-29T08:30:00,2026-09-29T14:30:00,0,Rigging & Scaffolding Crew,Site task,"{""id"":""E1070"",""name"":""Oliver Williams""}",Crane Operator,Rigging & Scaffolding,8/6 FIFO,Day
+Contractor induction,2026-09-29T11:00:00,2026-09-29T12:00:00,0,Rigging & Scaffolding Crew,Site task,"{""id"":""E1070"",""name"":""Oliver Williams""}",Crane Operator,Rigging & Scaffolding,8/6 FIFO,Day
+Handover to night crew,2026-09-29T17:30:00,2026-09-29T18:00:00,0,Rigging & Scaffolding Crew,Site task,"{""id"":""E1070"",""name"":""Oliver Williams""}",Crane Operator,Rigging & Scaffolding,8/6 FIFO,Day
 Swing 1 - Night shift,2026-09-02T00:00:00,2026-09-06T00:00:00,100,Rigging & Scaffolding Crew,Night shift,"{""id"":""E1071"",""name"":""Chloe Hall""}",Crane Operator,Rigging & Scaffolding,8/6 FIFO,Night
 Swing 2 - Day shift,2026-09-13T00:00:00,2026-09-20T00:00:00,50,Rigging & Scaffolding Crew,Day shift,"{""id"":""E1071"",""name"":""Chloe Hall""}",Crane Operator,Rigging & Scaffolding,8/6 FIFO,Day
 Swing 3 - Night shift,2026-09-27T00:00:00,2026-10-04T00:00:00,0,Rigging & Scaffolding Crew,Night shift,"{""id"":""E1071"",""name"":""Chloe Hall""}",Crane Operator,Rigging & Scaffolding,8/6 FIFO,Night
@@ -1024,7 +1063,7 @@ Swing 26 - Day shift,2027-03-01T00:00:00,2027-03-05T00:00:00,0,Rigging & Scaffol
 Swing 27 - Day shift,2027-03-08T00:00:00,2027-03-12T00:00:00,0,Rigging & Scaffolding Crew,Day shift,"{""id"":""E1078"",""name"":""Arjun Hall""}",Crane Operator,Rigging & Scaffolding,5/2 Residential,Day
 Swing 28 - Day shift,2027-03-15T00:00:00,2027-03-15T00:00:00,0,Rigging & Scaffolding Crew,Day shift,"{""id"":""E1078"",""name"":""Arjun Hall""}",Crane Operator,Rigging & Scaffolding,5/2 Residential,Day
 Swing 1 - Night shift,2026-09-02T00:00:00,2026-09-09T00:00:00,100,Rigging & Scaffolding Crew,Night shift,"{""id"":""E1079"",""name"":""Ravi Williams""}",Rigger,Rigging & Scaffolding,8/6 FIFO,Night
-Swing 2 - Day shift,2026-09-16T00:00:00,2026-09-23T00:00:00,0,Rigging & Scaffolding Crew,Day shift,"{""id"":""E1079"",""name"":""Ravi Williams""}",Rigger,Rigging & Scaffolding,8/6 FIFO,Day
+Swing 2 - Day shift,2026-09-16T00:00:00,2026-09-23T00:00:00,13,Rigging & Scaffolding Crew,Day shift,"{""id"":""E1079"",""name"":""Ravi Williams""}",Rigger,Rigging & Scaffolding,8/6 FIFO,Day
 Swing 3 - Night shift,2026-09-30T00:00:00,2026-10-07T00:00:00,0,Rigging & Scaffolding Crew,Night shift,"{""id"":""E1079"",""name"":""Ravi Williams""}",Rigger,Rigging & Scaffolding,8/6 FIFO,Night
 Swing 4 - Day shift,2026-10-14T00:00:00,2026-10-21T00:00:00,0,Rigging & Scaffolding Crew,Day shift,"{""id"":""E1079"",""name"":""Ravi Williams""}",Rigger,Rigging & Scaffolding,8/6 FIFO,Day
 Swing 5 - Night shift,2026-10-28T00:00:00,2026-11-04T00:00:00,0,Rigging & Scaffolding Crew,Night shift,"{""id"":""E1079"",""name"":""Ravi Williams""}",Rigger,Rigging & Scaffolding,8/6 FIFO,Night
@@ -1189,6 +1228,10 @@ Swing 5 - Day shift,2026-12-18T00:00:00,2026-12-31T00:00:00,0,Supervision & HSE 
 Swing 6 - Day shift,2027-01-15T00:00:00,2027-01-28T00:00:00,0,Supervision & HSE Crew,Day shift,"{""id"":""E1088"",""name"":""Hamish Jones""}",Site Supervisor,Supervision & HSE,14/14 FIFO,Day
 Swing 7 - Day shift,2027-02-12T00:00:00,2027-02-25T00:00:00,0,Supervision & HSE Crew,Day shift,"{""id"":""E1088"",""name"":""Hamish Jones""}",Site Supervisor,Supervision & HSE,14/14 FIFO,Day
 Swing 8 - Day shift,2027-03-12T00:00:00,2027-03-15T00:00:00,0,Supervision & HSE Crew,Day shift,"{""id"":""E1088"",""name"":""Hamish Jones""}",Site Supervisor,Supervision & HSE,14/14 FIFO,Day
+Pre-start toolbox talk,2026-09-26T06:00:00,2026-09-26T06:30:00,0,Supervision & HSE Crew,Site task,"{""id"":""E1088"",""name"":""Hamish Jones""}",Site Supervisor,Supervision & HSE,14/14 FIFO,Day
+Crane lift - conveyor section,2026-09-26T07:30:00,2026-09-26T11:00:00,0,Supervision & HSE Crew,Site task,"{""id"":""E1088"",""name"":""Hamish Jones""}",Site Supervisor,Supervision & HSE,14/14 FIFO,Day
+Confined space entry - transfer chute,2026-09-26T09:00:00,2026-09-26T13:00:00,0,Supervision & HSE Crew,Site task,"{""id"":""E1088"",""name"":""Hamish Jones""}",Site Supervisor,Supervision & HSE,14/14 FIFO,Day
+Isolation permit close-out,2026-09-26T15:30:00,2026-09-26T16:30:00,0,Supervision & HSE Crew,Site task,"{""id"":""E1088"",""name"":""Hamish Jones""}",Site Supervisor,Supervision & HSE,14/14 FIFO,Day
 Site induction,2026-11-30T00:00:00,2026-11-30T00:00:00,0,Supervision & HSE Crew,Induction,"{""id"":""E1089"",""name"":""Thomas Wilson""}",HSE Advisor,Supervision & HSE,5/2 Residential,
 Swing 1 - Day shift,2026-12-07T00:00:00,2026-12-11T00:00:00,0,Supervision & HSE Crew,Day shift,"{""id"":""E1089"",""name"":""Thomas Wilson""}",HSE Advisor,Supervision & HSE,5/2 Residential,Day
 Swing 2 - Day shift,2026-12-14T00:00:00,2026-12-18T00:00:00,0,Supervision & HSE Crew,Day shift,"{""id"":""E1089"",""name"":""Thomas Wilson""}",HSE Advisor,Supervision & HSE,5/2 Residential,Day
@@ -1225,6 +1268,10 @@ Swing 12 - Day shift,2026-11-23T00:00:00,2026-11-27T00:00:00,0,Supervision & HSE
 Swing 13 - Day shift,2026-11-30T00:00:00,2026-12-04T00:00:00,0,Supervision & HSE Crew,Day shift,"{""id"":""E1091"",""name"":""Oliver Lee""}",Site Administrator,Supervision & HSE,5/2 Residential,Day
 Swing 14 - Day shift,2026-12-07T00:00:00,2026-12-11T00:00:00,0,Supervision & HSE Crew,Day shift,"{""id"":""E1091"",""name"":""Oliver Lee""}",Site Administrator,Supervision & HSE,5/2 Residential,Day
 Swing 15 - Day shift,2026-12-14T00:00:00,2026-12-18T00:00:00,0,Supervision & HSE Crew,Day shift,"{""id"":""E1091"",""name"":""Oliver Lee""}",Site Administrator,Supervision & HSE,5/2 Residential,Day
+Pre-start toolbox talk,2026-09-16T06:00:00,2026-09-16T06:30:00,0,Supervision & HSE Crew,Site task,"{""id"":""E1091"",""name"":""Oliver Lee""}",Site Administrator,Supervision & HSE,5/2 Residential,Day
+Crane lift - conveyor section,2026-09-16T07:30:00,2026-09-16T11:00:00,0,Supervision & HSE Crew,Site task,"{""id"":""E1091"",""name"":""Oliver Lee""}",Site Administrator,Supervision & HSE,5/2 Residential,Day
+Confined space entry - transfer chute,2026-09-16T09:00:00,2026-09-16T13:00:00,0,Supervision & HSE Crew,Site task,"{""id"":""E1091"",""name"":""Oliver Lee""}",Site Administrator,Supervision & HSE,5/2 Residential,Day
+Isolation permit close-out,2026-09-16T15:30:00,2026-09-16T16:30:00,0,Supervision & HSE Crew,Site task,"{""id"":""E1091"",""name"":""Oliver Lee""}",Site Administrator,Supervision & HSE,5/2 Residential,Day
 Swing 1 - Day shift,2026-09-02T00:00:00,2026-09-04T00:00:00,100,Supervision & HSE Crew,Day shift,"{""id"":""E1092"",""name"":""Zoe Evans""}",Site Supervisor,Supervision & HSE,14/14 FIFO,Day
 Swing 2 - Day shift,2026-09-19T00:00:00,2026-10-02T00:00:00,0,Supervision & HSE Crew,Day shift,"{""id"":""E1092"",""name"":""Zoe Evans""}",Site Supervisor,Supervision & HSE,14/14 FIFO,Day
 Swing 3 - Day shift,2026-10-17T00:00:00,2026-10-30T00:00:00,0,Supervision & HSE Crew,Day shift,"{""id"":""E1092"",""name"":""Zoe Evans""}",Site Supervisor,Supervision & HSE,14/14 FIFO,Day
@@ -1305,6 +1352,9 @@ Swing 5 - Day shift,2027-01-02T00:00:00,2027-01-15T00:00:00,0,Supervision & HSE 
 Swing 6 - Day shift,2027-01-30T00:00:00,2027-02-12T00:00:00,0,Supervision & HSE Crew,Day shift,"{""id"":""E1096"",""name"":""Wei Singh""}",Site Supervisor,Supervision & HSE,14/14 FIFO,Day
 Swing 7 - Day shift,2027-02-27T00:00:00,2027-03-12T00:00:00,0,Supervision & HSE Crew,Day shift,"{""id"":""E1096"",""name"":""Wei Singh""}",Site Supervisor,Supervision & HSE,14/14 FIFO,Day
 Sick leave,2026-12-09T00:00:00,2026-12-11T00:00:00,0,Supervision & HSE Crew,Leave,"{""id"":""E1096"",""name"":""Wei Singh""}",Site Supervisor,Supervision & HSE,14/14 FIFO,
+Gearbox change-out,2026-09-16T07:00:00,2026-09-16T15:00:00,0,Supervision & HSE Crew,Site task,"{""id"":""E1096"",""name"":""Wei Singh""}",Site Supervisor,Supervision & HSE,14/14 FIFO,Day
+Hot work permit - handrail repair,2026-09-16T10:00:00,2026-09-16T12:30:00,0,Supervision & HSE Crew,Site task,"{""id"":""E1096"",""name"":""Wei Singh""}",Site Supervisor,Supervision & HSE,14/14 FIFO,Day
+Scaffold handover inspection,2026-09-16T15:00:00,2026-09-16T16:00:00,0,Supervision & HSE Crew,Site task,"{""id"":""E1096"",""name"":""Wei Singh""}",Site Supervisor,Supervision & HSE,14/14 FIFO,Day
 Swing 1 - Day shift,2026-09-07T00:00:00,2026-09-11T00:00:00,100,Supervision & HSE Crew,Day shift,"{""id"":""E1097"",""name"":""Oliver Singh""}",HSE Advisor,Supervision & HSE,5/2 Residential,Day
 Swing 2 - Day shift,2026-09-14T00:00:00,2026-09-18T00:00:00,60,Supervision & HSE Crew,Day shift,"{""id"":""E1097"",""name"":""Oliver Singh""}",HSE Advisor,Supervision & HSE,5/2 Residential,Day
 Swing 3 - Day shift,2026-09-21T00:00:00,2026-09-25T00:00:00,0,Supervision & HSE Crew,Day shift,"{""id"":""E1097"",""name"":""Oliver Singh""}",HSE Advisor,Supervision & HSE,5/2 Residential,Day
