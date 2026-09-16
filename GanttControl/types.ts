@@ -2,6 +2,9 @@ export type Density = "comfortable" | "compact";
 
 export type TimeScale = "day" | "week" | "month";
 
+/** Where a bar's colour comes from: the built-in time-based status, or a field on the record. */
+export type ColorMode = "status" | "field";
+
 export interface GanttTask {
     id: string;
     title: string;
@@ -10,6 +13,8 @@ export interface GanttTask {
     progress: number;
     parentId: string | null;
     category: string | null;
+    /** The value the colour scheme matches on, when colouring by a field. */
+    colorKey: string | null;
     /** Tasks sharing a row key are drawn as separate bars on a single row. */
     rowKey: string | null;
     /** Label for the merged row this task belongs to; the row key is shown when absent. */
@@ -89,9 +94,14 @@ export interface GanttChartProps {
     selectedRowId?: string;
     density: Density;
     timeScale: TimeScale;
+    /** Whether bars take their colour from the time-based status or from their colour key. */
+    colorMode: ColorMode;
+    /** The maker's legend, as JSON or "Value = #colour" shorthand; blank leaves the colours to the control. */
+    colorLegend: string;
     showToolbar: boolean;
     showCurrentTime: boolean;
     showProgress: boolean;
+    showLegend: boolean;
     isLoading: boolean;
     hasNextPage: boolean;
     /** Allocated size from the host; 0 means "not constrained, fill the parent". */

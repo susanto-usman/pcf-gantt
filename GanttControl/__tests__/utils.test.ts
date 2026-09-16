@@ -35,6 +35,7 @@ const task = (overrides: Partial<GanttTask> & Pick<GanttTask, "id">): GanttTask 
     progress: 0,
     parentId: null,
     category: null,
+    colorKey: null,
     rowKey: null,
     rowTitle: null,
     ...overrides,

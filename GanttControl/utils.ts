@@ -171,7 +171,11 @@ function buildRowUnits(tasks: GanttTask[]): RowUnits {
             weightedProgress += segment.progress * durationInDays(segment);
         }
 
+        // A merged row only speaks for a value its every segment shares; where
+        // they disagree the row carries none and its segments answer for
+        // themselves, which is what the tooltip and the colour scheme want.
         const categories = new Set(segments.map((segment) => segment.category));
+        const colorKeys = new Set(segments.map((segment) => segment.colorKey));
         const merged: GanttTask = {
             id: `${MERGED_ROW_PREFIX}${first.rowKey}`,
             title: segments.find((segment) => segment.rowTitle)?.rowTitle ?? first.rowKey,
@@ -180,6 +184,7 @@ function buildRowUnits(tasks: GanttTask[]): RowUnits {
             progress: weight > 0 ? Math.round(weightedProgress / weight) : 0,
             parentId: segments.find((segment) => segment.parentId)?.parentId ?? null,
             category: categories.size === 1 ? segments[0].category : null,
+            colorKey: colorKeys.size === 1 ? segments[0].colorKey : null,
             rowKey: first.rowKey,
             rowTitle: null,
         };

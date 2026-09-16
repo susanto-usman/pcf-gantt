@@ -2,7 +2,7 @@ import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import * as React from "react";
 import { GanttChart } from "./components/GanttChart";
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
-import { Density, GanttTask, TimeScale } from "./types";
+import { ColorMode, Density, GanttTask, TimeScale } from "./types";
 import { exclusiveEnd, startOfDay } from "./utils";
 
 type DatasetRecord = ComponentFramework.PropertyHelper.DataSetApi.EntityRecord;
@@ -87,6 +87,7 @@ function sameTasks(previous: GanttTask[], next: GanttTask[]): boolean {
             was.progress === task.progress &&
             was.parentId === task.parentId &&
             was.category === task.category &&
+            was.colorKey === task.colorKey &&
             was.rowKey === task.rowKey &&
             was.rowTitle === task.rowTitle
         );
@@ -95,6 +96,7 @@ function sameTasks(previous: GanttTask[], next: GanttTask[]): boolean {
 
 const DENSITIES: Density[] = ["comfortable", "compact"];
 const TIME_SCALES: TimeScale[] = ["day", "week", "month"];
+const COLOR_MODES: ColorMode[] = ["status", "field"];
 
 export class GanttControl implements ComponentFramework.ReactControl<IInputs, IOutputs> {
     private notifyOutputChanged: () => void;
@@ -146,9 +148,12 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             selectedRowId: this.selectedRowId,
             density: this.readEnum(context, "density", DENSITIES, "comfortable"),
             timeScale: this.readEnum(context, "timeScale", TIME_SCALES, "day"),
+            colorMode: this.readEnum(context, "colorMode", COLOR_MODES, "status"),
+            colorLegend: this.readString(context, "colorLegend", ""),
             showToolbar: this.readBoolean(context, "showToolbar", true),
             showCurrentTime: this.readBoolean(context, "showCurrentTime", true),
             showProgress: this.readBoolean(context, "showProgress", true),
+            showLegend: this.readBoolean(context, "showLegend", true),
             isLoading: dataset.loading,
             hasNextPage: Boolean(paging && paging.hasNextPage),
             width: context.mode.allocatedWidth > 0 ? context.mode.allocatedWidth : 0,
@@ -260,6 +265,9 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
         const progressField = field("progressField", "progress");
         const parentField = field("parentField", "parentId");
         const categoryField = field("categoryField", "");
+        // Colouring falls back to the category, so the common "colour by
+        // category" case needs no second setting.
+        const colorField = field("colorField", "");
         // Grouping is switched off by blanking the row key, so no record shares a row.
         const groupRows = this.readBoolean(context, "groupRows", true);
         const rowField = groupRows ? field("rowField", "") : unset;
@@ -299,6 +307,8 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
                 this.rowRecordIds.set(rowId, [recordId]);
             }
 
+            const category = this.readText(record, categoryField);
+
             tasks.push({
                 id,
                 title: this.readText(record, titleField) ?? "Untitled task",
@@ -308,7 +318,8 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
                 end: exclusiveEnd(end) > start ? end : start,
                 progress: Math.round(Math.max(0, Math.min(100, this.readNumber(record, progressField, 0)))),
                 parentId: this.readText(record, parentField),
-                category: this.readText(record, categoryField),
+                category,
+                colorKey: this.readText(record, colorField) ?? category,
                 rowKey,
                 rowTitle: this.readText(record, rowTitleField),
             });
@@ -387,6 +398,7 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             ["progressField", "Progress field", ""],
             ["parentField", "Parent field", ""],
             ["categoryField", "Category field", ""],
+            ["colorField", "Colour field", ""],
             ["rowField", "Row field", ""],
             ["rowTitleField", "Row title field", ""],
         ];
@@ -414,7 +426,8 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
         }
     }
 
-    private readFieldName(
+    /** A text property's value, trimmed, or the fallback when it is blank. */
+    private readString(
         context: ComponentFramework.Context<IInputs>,
         propertyName: keyof IInputs,
         fallback: string
@@ -423,6 +436,14 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             ComponentFramework.PropertyTypes.StringProperty | undefined;
         const raw = property && typeof property.raw === "string" ? property.raw.trim() : "";
         return raw.length > 0 ? raw : fallback;
+    }
+
+    private readFieldName(
+        context: ComponentFramework.Context<IInputs>,
+        propertyName: keyof IInputs,
+        fallback: string
+    ): string {
+        return this.readString(context, propertyName, fallback);
     }
 
     private readBoolean(

@@ -8,9 +8,10 @@ import {
     Tooltip,
 } from "@fluentui/react-components";
 import * as React from "react";
-import { cssVars, STATUS_LABELS, STATUS_TOKENS, useGanttStyles } from "../styles";
+import { BarPalette } from "../colors";
+import { cssVars, useGanttStyles } from "../styles";
 import { GanttTask } from "../types";
-import { diffInDays, exclusiveEnd, formatDateTime, hasTimeOfDay, TaskStatus } from "../utils";
+import { diffInDays, exclusiveEnd, formatDateTime, hasTimeOfDay } from "../utils";
 
 export interface BarLayout {
     left: number;
@@ -18,7 +19,12 @@ export interface BarLayout {
     start: Date;
     end: Date;
     progress: number;
-    status: TaskStatus;
+    /** The colour scheme's verdict on this bar: what it is painted with, and what that means. */
+    palette: BarPalette;
+    /** What the colour stands for, e.g. "On track" or "Night shift". Blank when nothing matched. */
+    label: string;
+    /** Names the label in the tooltip, e.g. "Status". */
+    caption: string;
     isMilestone: boolean;
 }
 
@@ -59,8 +65,7 @@ export const GanttBar: React.FC<GanttBarProps> = ({
     onOpen,
 }) => {
     const styles = useGanttStyles();
-    const { left, width, start, end, progress, status, isMilestone } = layout;
-    const palette = STATUS_TOKENS[status];
+    const { left, width, start, end, progress, palette, label, caption, isMilestone } = layout;
 
     /**
      * Bars can span the whole timeline — a summary bar is often thousands of
@@ -129,10 +134,12 @@ export const GanttBar: React.FC<GanttBarProps> = ({
                 <span className={styles.tooltipLabel}>Duration</span>
                 <span>{formatDuration(start, end)}</span>
             </div>
-            <div className={styles.tooltipRow}>
-                <span className={styles.tooltipLabel}>Status</span>
-                <span style={{ color: palette.text }}>{STATUS_LABELS[status]}</span>
-            </div>
+            {label && (
+                <div className={styles.tooltipRow}>
+                    <span className={styles.tooltipLabel}>{caption}</span>
+                    <span style={{ color: palette.text }}>{label}</span>
+                </div>
+            )}
             {task.category && (
                 <div className={styles.tooltipRow}>
                     <span className={styles.tooltipLabel}>Category</span>
@@ -161,7 +168,7 @@ export const GanttBar: React.FC<GanttBarProps> = ({
         tabIndex: -1,
         "aria-label": `${rowLabel ? `${rowLabel}, ` : ""}${task.title}. ${spokenRange}.${
             showProgress ? ` ${progress} percent complete.` : ""
-        } ${STATUS_LABELS[status]}.`,
+        }${label ? ` ${label}.` : ""}`,
         onClick: (event: React.MouseEvent) => {
             event.stopPropagation();
             onSelect(task.id);

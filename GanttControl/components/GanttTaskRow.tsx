@@ -1,7 +1,8 @@
 import { Button, mergeClasses, ProgressBar, Text, tokens } from "@fluentui/react-components";
 import * as React from "react";
+import { ColorScheme } from "../colors";
 import { useGanttStyles } from "../styles";
-import { Density, GanttRow, RowSelection, Timeline } from "../types";
+import { Density, GanttRow, GanttTask, RowSelection, Timeline } from "../types";
 import {
     barGeometry,
     diffInDays,
@@ -21,6 +22,8 @@ export interface GanttTaskRowProps {
     timeline: Timeline;
     today: Date;
     density: Density;
+    /** Where every bar on the row takes its colour and its legend label from. */
+    colors: ColorScheme;
     /** Whether the row is the selected one, merely holds the selected bar, or neither. */
     selection: RowSelection;
     /** The selected record when it is on this row; tells a merged row which bar to highlight. */
@@ -45,6 +48,7 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
     timeline,
     today,
     density,
+    colors,
     selection,
     selectedTaskId,
     isTabStop,
@@ -232,7 +236,11 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
                 <div className={styles.trackGrid} aria-hidden="true" />
                 {row.isMerged ? (
                     row.segments.map((segment, index) => {
-                        const layout = layoutFor(segment.start, segment.end, segment.progress, false, timeline, today);
+                        const layout = layoutFor(segment, segment.start, segment.end, segment.progress, false, {
+                            timeline,
+                            today,
+                            colors,
+                        });
 
                         return (
                             <GanttBar
@@ -252,7 +260,11 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
                 ) : (
                     <GanttBar
                         task={row.task}
-                        layout={layoutFor(start, end, progress, row.hasChildren, timeline, today)}
+                        layout={layoutFor(row.task, start, end, progress, row.hasChildren, {
+                            timeline,
+                            today,
+                            colors,
+                        })}
                         isSummary={row.hasChildren}
                         // Selecting the row is not selecting its bar, so only a
                         // bar the user picked carries the ring.
@@ -283,19 +295,27 @@ function overlapFor(level: number, topOfStack: number, isMilestone: boolean, den
 }
 
 function layoutFor(
+    task: GanttTask,
     start: Date,
     end: Date,
     progress: number,
     isSummary: boolean,
-    timeline: Timeline,
-    today: Date
+    context: { timeline: Timeline; today: Date; colors: ColorScheme }
 ): BarLayout {
+    const { timeline, today, colors } = context;
+    // The status is worked out whatever the scheme: a field-coloured chart
+    // still reports it nowhere, but a status-coloured one needs it, and it is
+    // cheaper to compute than to branch on.
+    const status = getTaskStatus(start, end, progress, today);
+
     return {
         ...barGeometry(start, end, timeline),
         start,
         end,
         progress,
-        status: getTaskStatus(start, end, progress, today),
+        palette: colors.paletteFor(task.colorKey, status),
+        label: colors.labelFor(task.colorKey, status),
+        caption: colors.caption,
         isMilestone: !isSummary && diffInDays(start, end) === 0 && timeline.scale !== "day",
     };
 }

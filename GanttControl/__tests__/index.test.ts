@@ -99,6 +99,7 @@ describe("GanttControl", () => {
                 progress: 43,
                 parentId: null,
                 category: null,
+                colorKey: null,
                 rowKey: null,
                 rowTitle: null,
             },
@@ -168,6 +169,42 @@ describe("GanttControl", () => {
 
         expect(props.tasks[0]).toMatchObject({ title: "Formatted", category: "Leave" });
         expect(props.dateFieldNames).toEqual({ start: "from", end: "to" });
+    });
+
+    it("takes the colour key from the colour field, falling back to the category", () => {
+        const { props } = render({
+            rows: [
+                { id: "1", title: "A", startDate: "2024-01-01", endDate: "2024-01-02", kind: "Leave", shift: "Night" },
+                { id: "2", title: "B", startDate: "2024-01-01", endDate: "2024-01-02", kind: "Leave", shift: null },
+            ],
+            settings: { categoryField: "kind", colorField: "shift" },
+        });
+
+        expect(props.tasks.map((task) => task.colorKey)).toEqual(["Night", "Leave"]);
+    });
+
+    it("defaults the colour settings to the built-in status scheme", () => {
+        const { props } = render({ rows: [{ id: "1", title: "A", startDate: "2024-01-01", endDate: "2024-01-02" }] });
+
+        expect(props).toMatchObject({ colorMode: "status", colorLegend: "", showLegend: true });
+    });
+
+    it("passes the maker's colour settings through to the chart", () => {
+        const { props } = render({
+            rows: [{ id: "1", title: "A", startDate: "2024-01-01", endDate: "2024-01-02" }],
+            settings: { colorMode: "field", colorLegend: " Planned=#0078D4 ", showLegend: false },
+        });
+
+        expect(props).toMatchObject({ colorMode: "field", colorLegend: "Planned=#0078D4", showLegend: false });
+    });
+
+    it("falls back to the status scheme when the colour mode is not one it knows", () => {
+        const { props } = render({
+            rows: [{ id: "1", title: "A", startDate: "2024-01-01", endDate: "2024-01-02" }],
+            settings: { colorMode: "rainbow" },
+        });
+
+        expect(props.colorMode).toBe("status");
     });
 
     it("reads a property off a lookup value, including JSON text and EntityReferences", () => {

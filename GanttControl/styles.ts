@@ -1,50 +1,5 @@
 import { makeStyles, tokens, typographyStyles } from "@fluentui/react-components";
-import { TaskStatus } from "./utils";
 
-/**
- * Bar colours are taken from the Fluent palette rather than hard-coded hex so
- * that they invert correctly in dark and high-contrast themes.
- */
-export const STATUS_TOKENS: Record<TaskStatus, { fill: string; track: string; text: string }> = {
-    complete: {
-        fill: tokens.colorPaletteGreenForeground3,
-        track: tokens.colorPaletteGreenBackground2,
-        text: tokens.colorPaletteGreenForeground1,
-    },
-    onTrack: {
-        fill: tokens.colorBrandBackground,
-        track: tokens.colorBrandBackground2,
-        text: tokens.colorBrandForeground1,
-    },
-    atRisk: {
-        fill: tokens.colorPaletteMarigoldForeground3,
-        track: tokens.colorPaletteMarigoldBackground2,
-        text: tokens.colorPaletteDarkOrangeForeground1,
-    },
-    overdue: {
-        fill: tokens.colorPaletteRedForeground3,
-        track: tokens.colorPaletteRedBackground2,
-        text: tokens.colorPaletteRedForeground1,
-    },
-    notStarted: {
-        fill: tokens.colorNeutralForeground3,
-        track: tokens.colorNeutralBackground5,
-        text: tokens.colorNeutralForeground3,
-    },
-};
-
-export const STATUS_LABELS: Record<TaskStatus, string> = {
-    complete: "Complete",
-    onTrack: "On track",
-    atRisk: "At risk",
-    overdue: "Overdue",
-    notStarted: "Not started",
-};
-
-/**
- * Sizing that changes with density or zoom is passed in as CSS custom
- * properties, since Griffel rules must be statically analysable.
- */
 /**
  * Fixed widths of the trailing columns in the task list, needed by the chart to
  * work out how much room the task name actually has. Keep these in sync with
@@ -66,6 +21,10 @@ export const NAME_CELL_CHROME = 44;
 /** The task name never shrinks below this; indentation gives way instead. */
 export const MIN_NAME_TEXT_WIDTH = 96;
 
+/**
+ * Sizing that changes with density or zoom is passed in as CSS custom
+ * properties, since Griffel rules must be statically analysable.
+ */
 export const cssVars = {
     rowHeight: "--gantt-row-height",
     barHeight: "--gantt-bar-height",

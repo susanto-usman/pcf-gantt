@@ -10,15 +10,8 @@ import {
     tokens,
 } from "@fluentui/react-components";
 import * as React from "react";
-import {
-    cssVars,
-    LIST_COLUMN_WIDTHS,
-    MIN_NAME_TEXT_WIDTH,
-    NAME_CELL_CHROME,
-    STATUS_LABELS,
-    STATUS_TOKENS,
-    useGanttStyles,
-} from "../styles";
+import { buildColorScheme } from "../colors";
+import { cssVars, LIST_COLUMN_WIDTHS, MIN_NAME_TEXT_WIDTH, NAME_CELL_CHROME, useGanttStyles } from "../styles";
 import { Density, GanttChartProps, GanttSelection, TimeScale } from "../types";
 import {
     BAR_HEIGHT,
@@ -34,7 +27,6 @@ import {
     selectRow,
     selectTask,
     startOfDay,
-    TaskStatus,
 } from "../utils";
 import { EmptyReason, GanttEmptyState } from "./GanttEmptyState";
 import { GanttTaskRow } from "./GanttTaskRow";
@@ -48,7 +40,6 @@ import { DismissIcon } from "./icons";
 const MIN_LIST_WIDTH: Record<Density, number> = { comfortable: 340, compact: 160 };
 const DEFAULT_LIST_WIDTH: Record<Density, number> = { comfortable: 440, compact: 260 };
 const MAX_LIST_WIDTH = 640;
-const LEGEND_STATUSES: TaskStatus[] = ["onTrack", "atRisk", "overdue", "complete", "notStarted"];
 /** Rows rendered above and below the viewport so scrolling stays smooth. */
 const OVERSCAN = 8;
 const BOUNDARY_DEBOUNCE_MS = 500;
@@ -79,9 +70,12 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     selectedRowId,
     density: densityProp,
     timeScale: timeScaleProp,
+    colorMode,
+    colorLegend,
     showToolbar,
     showCurrentTime,
     showProgress,
+    showLegend,
     isLoading,
     hasNextPage,
     width,
@@ -204,6 +198,13 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     }, [tasks, search]);
 
     const rows = React.useMemo(() => buildRows(filteredTasks, collapsedIds), [filteredTasks, collapsedIds]);
+
+    // Built from every task rather than the filtered set, so searching narrows
+    // the chart without rewriting the legend under it.
+    const colors = React.useMemo(
+        () => buildColorScheme(colorMode, colorLegend, tasks),
+        [colorMode, colorLegend, tasks]
+    );
 
     // Canvas pushes every keystroke of a bound input through, so wait for the
     // boundary to settle rather than rebuilding the timeline per character.
@@ -678,6 +679,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                                 timeline={timeline}
                                 today={today}
                                 density={density}
+                                colors={colors}
                                 selection={row.task.id === activeRowId ? (selection.rowId ? "row" : "task") : "none"}
                                 // Only passed to the selected row, so the rest keep their memoised render.
                                 selectedTaskId={row.task.id === activeRowId ? selection.taskId : undefined}
@@ -698,16 +700,17 @@ export const GanttChart: React.FC<GanttChartProps> = ({
 
             <div className={styles.statusBar}>
                 <div className={styles.legend}>
-                    {LEGEND_STATUSES.map((status) => (
-                        <span key={status} className={styles.legendItem}>
-                            <span
-                                className={styles.legendSwatch}
-                                style={{ backgroundColor: STATUS_TOKENS[status].fill }}
-                                aria-hidden="true"
-                            />
-                            {STATUS_LABELS[status]}
-                        </span>
-                    ))}
+                    {showLegend &&
+                        colors.items.map((item) => (
+                            <span key={item.key} className={styles.legendItem}>
+                                <span
+                                    className={styles.legendSwatch}
+                                    style={{ backgroundColor: item.palette.fill }}
+                                    aria-hidden="true"
+                                />
+                                {item.label}
+                            </span>
+                        ))}
                 </div>
 
                 <span style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS }}>
