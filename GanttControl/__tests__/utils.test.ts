@@ -11,6 +11,8 @@ import {
     diffInDays,
     getTaskExtent,
     getTaskStatus,
+    hasTimeOfDay,
+    instantToOffset,
     isSameDay,
     isWeekend,
     overlapHeight,
@@ -24,6 +26,7 @@ import {
 
 /** Local-time date, so tests hold in any timezone. Months are 1-based for readability. */
 const d = (year: number, month: number, day: number) => new Date(year, month - 1, day);
+const at = (year: number, month: number, day: number, hour: number) => new Date(year, month - 1, day, hour);
 
 const task = (overrides: Partial<GanttTask> & Pick<GanttTask, "id">): GanttTask => ({
     title: overrides.id,
@@ -369,10 +372,68 @@ describe("dateToOffset and barGeometry", () => {
         expect(dateToOffset(d(2024, 2, 15), timeline)).toBeCloseTo(88 + (14 / 29) * 88);
     });
 
+    it("places a timed bar inside its day column", () => {
+        const timeline = buildTimeline(d(2024, 1, 3), d(2024, 1, 10), "day", "comfortable", d(2024, 1, 1));
+
+        // 09:00 to 17:00 on 4 Jan: three columns in, a third of a column wide.
+        const bar = barGeometry(at(2024, 1, 4, 9), at(2024, 1, 4, 17), timeline);
+
+        expect(bar.left).toBe(120 + 40 * 0.375);
+        expect(bar.width).toBeCloseTo(40 * (8 / 24));
+    });
+
+    it("runs a timed start to the end of a date-only end day", () => {
+        const timeline = buildTimeline(d(2024, 1, 3), d(2024, 1, 10), "day", "comfortable", d(2024, 1, 1));
+
+        expect(barGeometry(at(2024, 1, 4, 12), d(2024, 1, 4), timeline)).toEqual({ left: 140, width: 20 });
+    });
+
+    it("ignores the time of day on the coarser scales", () => {
+        const timeline = buildTimeline(d(2024, 1, 1), d(2024, 12, 31), "month", "comfortable", d(2024, 1, 1));
+
+        expect(barGeometry(at(2024, 6, 1, 9), at(2024, 6, 3, 17), timeline)).toEqual(
+            barGeometry(d(2024, 6, 1), d(2024, 6, 3), timeline)
+        );
+    });
+
     it("keeps very short bars visible", () => {
         const timeline = buildTimeline(d(2024, 1, 1), d(2024, 12, 31), "month", "compact", d(2024, 1, 1));
 
         expect(barGeometry(d(2024, 6, 1), d(2024, 6, 1), timeline).width).toBe(4);
+    });
+});
+
+describe("instantToOffset", () => {
+    it("places the instant partway across its day column", () => {
+        const timeline = buildTimeline(d(2024, 1, 3), d(2024, 1, 10), "day", "comfortable", d(2024, 1, 1));
+
+        expect(instantToOffset(d(2024, 1, 4), timeline)).toBe(120);
+        expect(instantToOffset(at(2024, 1, 4, 6), timeline)).toBeCloseTo(120 + 40 * 0.25);
+        expect(instantToOffset(at(2024, 1, 4, 18), timeline)).toBeCloseTo(120 + 40 * 0.75);
+    });
+
+    it("scales the time of day down to a week column", () => {
+        const timeline = buildTimeline(d(2024, 1, 14), d(2024, 1, 20), "week", "comfortable", d(2024, 1, 1));
+        const noon = new Date(timeline.start.getFullYear(), timeline.start.getMonth(), timeline.start.getDate(), 12);
+
+        expect(instantToOffset(noon, timeline)).toBeCloseTo((0.5 / 7) * 64);
+    });
+
+    it("scales the time of day down to a month column", () => {
+        const timeline = buildTimeline(d(2024, 2, 1), d(2024, 2, 29), "month", "comfortable", d(2024, 1, 1));
+
+        expect(instantToOffset(at(2024, 2, 15, 12), timeline)).toBeCloseTo(88 + ((14 + 0.5) / 29) * 88);
+    });
+
+    it("never runs past the column it belongs to", () => {
+        const timeline = buildTimeline(d(2024, 1, 3), d(2024, 1, 10), "day", "comfortable", d(2024, 1, 1));
+
+        // A DST changeover makes the day 23 or 25 hours long; the last instant
+        // of any day must still fall short of the next column.
+        for (let day = 1; day <= 8; day += 1) {
+            const lastMoment = new Date(2024, 0, day, 23, 59, 59, 999);
+            expect(instantToOffset(lastMoment, timeline)).toBeLessThan(dateToOffset(d(2024, 1, day + 1), timeline));
+        }
     });
 });
 

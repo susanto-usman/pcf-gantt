@@ -27,6 +27,8 @@ import {
     collectParentIds,
     dateToOffset,
     getTaskExtent,
+    instantToOffset,
+    isSameDay,
     ROW_HEIGHT,
     rowIdOf,
     selectRow,
@@ -52,6 +54,8 @@ const OVERSCAN = 8;
 const BOUNDARY_DEBOUNCE_MS = 500;
 /** Ten years; a longer boundary is treated as a typo rather than drawn. */
 const MAX_BOUNDARY_SPAN_MS = 3653 * 86400000;
+
+const MS_PER_HOUR = 3600000;
 
 /** Follows value, but only once it has stopped changing for delayMs. */
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -102,6 +106,10 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     const [isResizing, setIsResizing] = React.useState(false);
     const [scrollTop, setScrollTop] = React.useState(0);
     const [viewportHeight, setViewportHeight] = React.useState(height);
+    // Two clocks: `now` moves the marker within the day, while `today` stays
+    // day-granular so the timeline, task status and segment memos are not
+    // rebuilt on every tick.
+    const [now, setNow] = React.useState(() => new Date());
     const [today, setToday] = React.useState(() => startOfDay(new Date()));
 
     /**
@@ -150,16 +158,34 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     React.useEffect(() => setDensity(densityProp), [densityProp]);
     React.useEffect(() => setTimeScale(timeScaleProp), [timeScaleProp]);
 
-    // Roll the "today" marker over at midnight rather than on a polling timer.
+    // The marker advances on the hour, and the date rolls over on the tick
+    // past midnight. Each timeout is measured against the clock rather than
+    // chained, so a throttled background tab resumes on the next boundary
+    // instead of accumulating drift.
     React.useEffect(() => {
         if (!showCurrentTime) {
             return undefined;
         }
 
-        const msUntilMidnight = startOfDay(new Date()).getTime() + 86400000 - Date.now();
-        const timeoutId = window.setTimeout(() => setToday(startOfDay(new Date())), msUntilMidnight + 1000);
+        const clock = new Date();
+        const msUntilNextHour =
+            MS_PER_HOUR - (clock.getMinutes() * 60000 + clock.getSeconds() * 1000 + clock.getMilliseconds());
+        const timeoutId = window.setTimeout(() => {
+            const current = new Date();
+
+            setNow(current);
+            setToday((previous) => (isSameDay(previous, current) ? previous : startOfDay(current)));
+        }, msUntilNextHour + 1000);
         return () => window.clearTimeout(timeoutId);
-    }, [showCurrentTime, today]);
+    }, [showCurrentTime, now]);
+
+    // A hidden marker stops ticking, so showing it again resyncs rather than
+    // sitting at an hours-old position until the next boundary.
+    React.useEffect(() => {
+        if (showCurrentTime) {
+            setNow((previous) => (Date.now() - previous.getTime() < MS_PER_HOUR ? previous : new Date()));
+        }
+    }, [showCurrentTime]);
 
     const filteredTasks = React.useMemo(() => {
         const term = search.trim().toLowerCase();
@@ -383,7 +409,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     const lastVisible = Math.min(rows.length, Math.ceil((scrollTop + viewportHeight) / rowHeight) + OVERSCAN);
     const visibleRows = rows.slice(firstVisible, lastVisible);
 
-    const todayOffset = showCurrentTime ? dateToOffset(today, timeline) : 0;
+    const currentTimeOffset = showCurrentTime ? instantToOffset(now, timeline) : 0;
     const isTodayInRange = showCurrentTime && today >= timeline.start && today <= timeline.end;
 
     // The row to highlight: the selected row itself, or the one carrying the
@@ -636,7 +662,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                             <div
                                 aria-hidden="true"
                                 className={styles.todayMarker}
-                                style={{ left: `${listWidth + todayOffset}px` }}
+                                style={{ left: `${listWidth + currentTimeOffset}px` }}
                             >
                                 <span className={styles.todayFlag} />
                             </div>

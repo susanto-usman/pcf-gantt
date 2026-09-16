@@ -83,7 +83,7 @@ describe("GanttControl", () => {
                     id: "1",
                     title: "Design",
                     startDate: "2024-01-01T10:30:00",
-                    endDate: new Date(2024, 0, 5, 17),
+                    endDate: new Date(2024, 0, 5, 17, 30),
                     progress: "42.6",
                     parentId: null,
                 },
@@ -94,8 +94,8 @@ describe("GanttControl", () => {
             {
                 id: "1",
                 title: "Design",
-                start: d(2024, 1, 1),
-                end: d(2024, 1, 5),
+                start: new Date(2024, 0, 1, 10, 30),
+                end: new Date(2024, 0, 5, 17, 30),
                 progress: 43,
                 parentId: null,
                 category: null,
@@ -114,6 +114,32 @@ describe("GanttControl", () => {
 
         expect(props.tasks[0].start).toEqual(d(2024, 1, 1));
         expect(props.tasks[0].end).toEqual(d(2024, 12, 31));
+    });
+
+    it("reads a midnight-UTC value as that calendar day rather than shifting it", () => {
+        const { props } = render({
+            rows: [
+                {
+                    id: "1",
+                    title: "T",
+                    startDate: new Date(Date.UTC(2024, 0, 1)),
+                    endDate: new Date(Date.UTC(2024, 0, 2)),
+                },
+            ],
+        });
+
+        expect(props.tasks[0].start).toEqual(d(2024, 1, 1));
+        expect(props.tasks[0].end).toEqual(d(2024, 1, 2));
+    });
+
+    it("keeps a timed start against a date-only end on the same day", () => {
+        const { props } = render({
+            rows: [{ id: "1", title: "T", startDate: "2024-01-01T09:00:00", endDate: "2024-01-01" }],
+        });
+
+        expect(props.tasks[0].start).toEqual(new Date(2024, 0, 1, 9));
+        // Not clamped back to the start: the bar still runs to the end of the day.
+        expect(props.tasks[0].end).toEqual(d(2024, 1, 1));
     });
 
     it("skips records without dates and repairs inverted ranges and bad progress", () => {

@@ -56,3 +56,8 @@ Maintenance Window Prep,2027-02-27,2027-03-20,75,Adoption Tracking
 Quarterly Review,2027-03-01,2027-03-22,80,Operational Readiness
 Phase Closure,2027-03-04,2027-03-25,85,Maintenance Window Prep
 Success Metrics,2027-03-08,2027-03-29,90,Quarterly Review
+Cutover Briefing,2026-11-09T06:30:00,2026-11-09T07:15:00,0,Pilot Release
+Cutover Execution,2026-11-09T07:15:00,2026-11-09T13:30:00,0,Pilot Release
+Smoke Testing,2026-11-09T11:00:00,2026-11-09T15:00:00,0,Pilot Release
+Go-Live Sign-off,2026-11-09T16:00:00,2026-11-09T17:30:00,0,Pilot Release
+Hypercare Window,2026-11-09T17:30:00,2026-11-11,0,Pilot Release

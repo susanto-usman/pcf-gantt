@@ -79,6 +79,33 @@ export function formatDate(date: Date): string {
     return formatWith({ day: "numeric", month: "short", year: "numeric" }).format(date);
 }
 
+/** True when a value carries a time of day rather than sitting at midnight. */
+export function hasTimeOfDay(date: Date): boolean {
+    return date.getHours() + date.getMinutes() + date.getSeconds() + date.getMilliseconds() > 0;
+}
+
+/** The date alone for a date-only value, and the time of day as well for the rest. */
+export function formatDateTime(date: Date): string {
+    return hasTimeOfDay(date)
+        ? formatWith({
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+          }).format(date)
+        : formatDate(date);
+}
+
+/**
+ * Where a task stops, as an exclusive instant. A date-only end is inclusive of
+ * its whole day, so it runs to the following midnight; an end carrying a time
+ * stops at that time.
+ */
+export function exclusiveEnd(end: Date): Date {
+    return hasTimeOfDay(end) ? end : addDays(end, 1);
+}
+
 /** Prefix for synthesised merged-row ids, keeping them clear of record ids. */
 const MERGED_ROW_PREFIX = "row:";
 
@@ -222,8 +249,9 @@ export function overlapLevels(segments: { start: Date; end: Date }[]): number[] 
         let level = 0;
 
         for (let before = 0; before < index; before++) {
-            // End dates are inclusive, so bars meeting on one day do overlap.
-            if (segments[before].end >= segments[index].start) {
+            // Compared against the drawn extent, so a date-only end still holds
+            // its whole day while two timed segments only clash if their hours do.
+            if (exclusiveEnd(segments[before].end) > segments[index].start) {
                 level = Math.max(level, levels[before] + 1);
             }
         }
@@ -539,12 +567,49 @@ export function dateToOffset(date: Date, timeline: Timeline): number {
     return (monthsApart + (date.getDate() - 1) / daysInMonth) * columnWidth;
 }
 
+/**
+ * How far through its calendar day `date` falls, 0 at midnight and 1 at the
+ * next. Divided by the day's own length rather than a fixed 24h so the two
+ * DST days do not land short of or past their own midnight.
+ */
+function fractionOfDay(date: Date): number {
+    const dayStart = startOfDay(date).getTime();
+    return (date.getTime() - dayStart) / (startOfDay(addDays(date, 1)).getTime() - dayStart);
+}
+
+/**
+ * Like dateToOffset, but places an instant at its time of day inside the
+ * column instead of at the column's leading edge.
+ */
+export function instantToOffset(date: Date, timeline: Timeline): number {
+    const { scale, columnWidth } = timeline;
+    const withinDay = fractionOfDay(date) * columnWidth;
+
+    if (scale === "day") {
+        return dateToOffset(date, timeline) + withinDay;
+    }
+
+    if (scale === "week") {
+        return dateToOffset(date, timeline) + withinDay / 7;
+    }
+
+    const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    return dateToOffset(date, timeline) + withinDay / daysInMonth;
+}
+
 /** Pixel geometry of a bar spanning start..end inclusive. */
 export function barGeometry(start: Date, end: Date, timeline: Timeline): { left: number; width: number } {
-    const left = dateToOffset(start, timeline);
-    // End dates are inclusive, so the bar runs to the start of the following day.
-    const right = dateToOffset(addDays(end, 1), timeline);
-    return { left, width: Math.max(timeline.scale === "day" ? 8 : 4, right - left) };
+    // A column is a week or a month on the other scales, far too coarse to read
+    // an hour off, so only the day scale resolves the time of day. Elsewhere the
+    // bar keeps whole-day edges, which dateToOffset gives by ignoring the time.
+    if (timeline.scale !== "day") {
+        const left = dateToOffset(start, timeline);
+        // End dates are inclusive, so the bar runs to the start of the following day.
+        return { left, width: Math.max(4, dateToOffset(addDays(end, 1), timeline) - left) };
+    }
+
+    const left = instantToOffset(start, timeline);
+    return { left, width: Math.max(8, instantToOffset(exclusiveEnd(end), timeline) - left) };
 }
 
 export type TaskStatus = "notStarted" | "onTrack" | "atRisk" | "overdue" | "complete";
@@ -554,11 +619,13 @@ export function getTaskStatus(start: Date, end: Date, progress: number, today: D
         return "complete";
     }
 
-    if (today < start) {
+    // Compared by date rather than by instant: a task starting at 09:00 is under
+    // way for the whole of today, not "not started" until the clock catches up.
+    if (diffInDays(today, start) > 0) {
         return "notStarted";
     }
 
-    if (today > end) {
+    if (diffInDays(end, today) > 0) {
         return "overdue";
     }
 

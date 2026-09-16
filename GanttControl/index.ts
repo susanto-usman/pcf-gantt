@@ -3,7 +3,7 @@ import * as React from "react";
 import { GanttChart } from "./components/GanttChart";
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { Density, GanttTask, TimeScale } from "./types";
-import { startOfDay } from "./utils";
+import { exclusiveEnd, startOfDay } from "./utils";
 
 type DatasetRecord = ComponentFramework.PropertyHelper.DataSetApi.EntityRecord;
 
@@ -303,7 +303,9 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
                 id,
                 title: this.readText(record, titleField) ?? "Untitled task",
                 start,
-                end: end >= start ? end : start,
+                // Compared against the drawn extent so a timed start paired with
+                // a date-only end on the same day still spans the rest of it.
+                end: exclusiveEnd(end) > start ? end : start,
                 progress: Math.round(Math.max(0, Math.min(100, this.readNumber(record, progressField, 0)))),
                 parentId: this.readText(record, parentField),
                 category: this.readText(record, categoryField),
@@ -502,9 +504,15 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             return null;
         }
 
-        // Bars are laid out per day, so normalise away the time component to
-        // stop timezone offsets shifting a task into the neighbouring day.
-        date.setHours(0, 0, 0, 0);
+        // A date-only column reaches us at UTC midnight, which is the previous
+        // local day west of UTC, so it is read back as that calendar date. Every
+        // other value keeps its time of day for the day scale to draw. The cost
+        // is that a real midnight-UTC appointment is taken for a date, the only
+        // reading that also keeps date-only columns on their own day.
+        if (date.getUTCHours() + date.getUTCMinutes() + date.getUTCSeconds() + date.getUTCMilliseconds() === 0) {
+            return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+        }
+
         return date;
     }
 

@@ -333,6 +333,54 @@
         "shift": "Night"
     },
     {
+        "title": "Shutdown planning meeting",
+        "startDate": "2026-09-25T08:00:00",
+        "endDate": "2026-09-25T09:30:00",
+        "progress": 0,
+        "parentId": "Mechanical Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1002",
+            "name": "Cooper Davis"
+        },
+        "role": "Millwright",
+        "crew": "Mechanical",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Pump alignment check",
+        "startDate": "2026-09-25T09:00:00",
+        "endDate": "2026-09-25T11:30:00",
+        "progress": 0,
+        "parentId": "Mechanical Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1002",
+            "name": "Cooper Davis"
+        },
+        "role": "Millwright",
+        "crew": "Mechanical",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Vibration survey",
+        "startDate": "2026-09-25T13:00:00",
+        "endDate": "2026-09-25T14:15:00",
+        "progress": 0,
+        "parentId": "Mechanical Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1002",
+            "name": "Cooper Davis"
+        },
+        "role": "Millwright",
+        "crew": "Mechanical",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
         "title": "Swing 1 - Day shift",
         "startDate": "2026-09-02T00:00:00",
         "endDate": "2026-09-14T00:00:00",
@@ -1037,6 +1085,54 @@
         "shift": "Day"
     },
     {
+        "title": "Shutdown planning meeting",
+        "startDate": "2026-09-19T08:00:00",
+        "endDate": "2026-09-19T09:30:00",
+        "progress": 0,
+        "parentId": "Mechanical Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1006",
+            "name": "Zoe White"
+        },
+        "role": "Mechanical Fitter",
+        "crew": "Mechanical",
+        "roster": "7/7 DIDO",
+        "shift": "Day"
+    },
+    {
+        "title": "Pump alignment check",
+        "startDate": "2026-09-19T09:00:00",
+        "endDate": "2026-09-19T11:30:00",
+        "progress": 0,
+        "parentId": "Mechanical Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1006",
+            "name": "Zoe White"
+        },
+        "role": "Mechanical Fitter",
+        "crew": "Mechanical",
+        "roster": "7/7 DIDO",
+        "shift": "Day"
+    },
+    {
+        "title": "Vibration survey",
+        "startDate": "2026-09-19T13:00:00",
+        "endDate": "2026-09-19T14:15:00",
+        "progress": 0,
+        "parentId": "Mechanical Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1006",
+            "name": "Zoe White"
+        },
+        "role": "Mechanical Fitter",
+        "crew": "Mechanical",
+        "roster": "7/7 DIDO",
+        "shift": "Day"
+    },
+    {
         "title": "Swing 1 - Day shift",
         "startDate": "2026-09-02T00:00:00",
         "endDate": "2026-09-07T00:00:00",
@@ -1280,7 +1376,7 @@
         "title": "Sick leave",
         "startDate": "2026-09-16T00:00:00",
         "endDate": "2026-09-16T00:00:00",
-        "progress": 0,
+        "progress": 100,
         "parentId": "Mechanical Crew",
         "category": "Leave",
         "employee": {
@@ -1440,7 +1536,7 @@
         "title": "Swing 1 - Night shift",
         "startDate": "2026-09-16T00:00:00",
         "endDate": "2026-09-29T00:00:00",
-        "progress": 0,
+        "progress": 7,
         "parentId": "Mechanical Crew",
         "category": "Night shift",
         "employee": {
@@ -1984,7 +2080,7 @@
         "title": "Annual leave",
         "startDate": "2026-09-16T00:00:00",
         "endDate": "2026-09-23T00:00:00",
-        "progress": 0,
+        "progress": 13,
         "parentId": "Mechanical Crew",
         "category": "Leave",
         "employee": {
@@ -5085,6 +5181,54 @@
         "shift": ""
     },
     {
+        "title": "Gearbox change-out",
+        "startDate": "2026-09-16T07:00:00",
+        "endDate": "2026-09-16T15:00:00",
+        "progress": 0,
+        "parentId": "Mechanical Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1025",
+            "name": "Lucia Wang"
+        },
+        "role": "Mechanical Fitter",
+        "crew": "Mechanical",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Hot work permit - handrail repair",
+        "startDate": "2026-09-16T10:00:00",
+        "endDate": "2026-09-16T12:30:00",
+        "progress": 0,
+        "parentId": "Mechanical Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1025",
+            "name": "Lucia Wang"
+        },
+        "role": "Mechanical Fitter",
+        "crew": "Mechanical",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Scaffold handover inspection",
+        "startDate": "2026-09-16T15:00:00",
+        "endDate": "2026-09-16T16:00:00",
+        "progress": 0,
+        "parentId": "Mechanical Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1025",
+            "name": "Lucia Wang"
+        },
+        "role": "Mechanical Fitter",
+        "crew": "Mechanical",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
         "title": "Electrical & Instrumentation Crew",
         "startDate": "2026-09-02T00:00:00",
         "endDate": "2027-03-15T00:00:00",
@@ -5117,7 +5261,7 @@
         "title": "Annual leave",
         "startDate": "2026-09-16T00:00:00",
         "endDate": "2026-09-23T00:00:00",
-        "progress": 0,
+        "progress": 13,
         "parentId": "Electrical & Instrumentation Crew",
         "category": "Leave",
         "employee": {
@@ -7850,6 +7994,54 @@
         "shift": "Day"
     },
     {
+        "title": "Gearbox change-out",
+        "startDate": "2026-09-16T07:00:00",
+        "endDate": "2026-09-16T15:00:00",
+        "progress": 0,
+        "parentId": "Electrical & Instrumentation Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1036",
+            "name": "Charlotte Kovac"
+        },
+        "role": "Instrument Technician",
+        "crew": "Electrical & Instrumentation",
+        "roster": "5/2 Residential",
+        "shift": "Day"
+    },
+    {
+        "title": "Hot work permit - handrail repair",
+        "startDate": "2026-09-16T10:00:00",
+        "endDate": "2026-09-16T12:30:00",
+        "progress": 0,
+        "parentId": "Electrical & Instrumentation Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1036",
+            "name": "Charlotte Kovac"
+        },
+        "role": "Instrument Technician",
+        "crew": "Electrical & Instrumentation",
+        "roster": "5/2 Residential",
+        "shift": "Day"
+    },
+    {
+        "title": "Scaffold handover inspection",
+        "startDate": "2026-09-16T15:00:00",
+        "endDate": "2026-09-16T16:00:00",
+        "progress": 0,
+        "parentId": "Electrical & Instrumentation Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1036",
+            "name": "Charlotte Kovac"
+        },
+        "role": "Instrument Technician",
+        "crew": "Electrical & Instrumentation",
+        "roster": "5/2 Residential",
+        "shift": "Day"
+    },
+    {
         "title": "Swing 1 - Day shift",
         "startDate": "2026-09-04T00:00:00",
         "endDate": "2026-09-11T00:00:00",
@@ -8170,6 +8362,70 @@
         "shift": ""
     },
     {
+        "title": "Plant walkdown",
+        "startDate": "2026-10-07T06:45:00",
+        "endDate": "2026-10-07T08:00:00",
+        "progress": 0,
+        "parentId": "Electrical & Instrumentation Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1038",
+            "name": "Evie Ngata"
+        },
+        "role": "Electrician",
+        "crew": "Electrical & Instrumentation",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Valve replacement - slurry line",
+        "startDate": "2026-10-07T08:30:00",
+        "endDate": "2026-10-07T14:30:00",
+        "progress": 0,
+        "parentId": "Electrical & Instrumentation Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1038",
+            "name": "Evie Ngata"
+        },
+        "role": "Electrician",
+        "crew": "Electrical & Instrumentation",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Contractor induction",
+        "startDate": "2026-10-07T11:00:00",
+        "endDate": "2026-10-07T12:00:00",
+        "progress": 0,
+        "parentId": "Electrical & Instrumentation Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1038",
+            "name": "Evie Ngata"
+        },
+        "role": "Electrician",
+        "crew": "Electrical & Instrumentation",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Handover to night crew",
+        "startDate": "2026-10-07T17:30:00",
+        "endDate": "2026-10-07T18:00:00",
+        "progress": 0,
+        "parentId": "Electrical & Instrumentation Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1038",
+            "name": "Evie Ngata"
+        },
+        "role": "Electrician",
+        "crew": "Electrical & Instrumentation",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
         "title": "Swing 1 - Night shift",
         "startDate": "2026-09-02T00:00:00",
         "endDate": "2026-09-09T00:00:00",
@@ -8328,6 +8584,54 @@
         "crew": "Electrical & Instrumentation",
         "roster": "14/14 FIFO",
         "shift": ""
+    },
+    {
+        "title": "Shutdown planning meeting",
+        "startDate": "2026-09-18T08:00:00",
+        "endDate": "2026-09-18T09:30:00",
+        "progress": 0,
+        "parentId": "Electrical & Instrumentation Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1039",
+            "name": "William Ngata"
+        },
+        "role": "E&I Leading Hand",
+        "crew": "Electrical & Instrumentation",
+        "roster": "21/7 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Pump alignment check",
+        "startDate": "2026-09-18T09:00:00",
+        "endDate": "2026-09-18T11:30:00",
+        "progress": 0,
+        "parentId": "Electrical & Instrumentation Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1039",
+            "name": "William Ngata"
+        },
+        "role": "E&I Leading Hand",
+        "crew": "Electrical & Instrumentation",
+        "roster": "21/7 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Vibration survey",
+        "startDate": "2026-09-18T13:00:00",
+        "endDate": "2026-09-18T14:15:00",
+        "progress": 0,
+        "parentId": "Electrical & Instrumentation Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1039",
+            "name": "William Ngata"
+        },
+        "role": "E&I Leading Hand",
+        "crew": "Electrical & Instrumentation",
+        "roster": "21/7 FIFO",
+        "shift": "Day"
     },
     {
         "title": "Swing 1 - Night shift",
@@ -8848,6 +9152,70 @@
         "progress": 0,
         "parentId": "Electrical & Instrumentation Crew",
         "category": "Day shift",
+        "employee": {
+            "id": "E1041",
+            "name": "Arjun Taylor"
+        },
+        "role": "Electrician",
+        "crew": "Electrical & Instrumentation",
+        "roster": "21/7 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Plant walkdown",
+        "startDate": "2026-09-16T06:45:00",
+        "endDate": "2026-09-16T08:00:00",
+        "progress": 0,
+        "parentId": "Electrical & Instrumentation Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1041",
+            "name": "Arjun Taylor"
+        },
+        "role": "Electrician",
+        "crew": "Electrical & Instrumentation",
+        "roster": "21/7 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Valve replacement - slurry line",
+        "startDate": "2026-09-16T08:30:00",
+        "endDate": "2026-09-16T14:30:00",
+        "progress": 0,
+        "parentId": "Electrical & Instrumentation Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1041",
+            "name": "Arjun Taylor"
+        },
+        "role": "Electrician",
+        "crew": "Electrical & Instrumentation",
+        "roster": "21/7 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Contractor induction",
+        "startDate": "2026-09-16T11:00:00",
+        "endDate": "2026-09-16T12:00:00",
+        "progress": 0,
+        "parentId": "Electrical & Instrumentation Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1041",
+            "name": "Arjun Taylor"
+        },
+        "role": "Electrician",
+        "crew": "Electrical & Instrumentation",
+        "roster": "21/7 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Handover to night crew",
+        "startDate": "2026-09-16T17:30:00",
+        "endDate": "2026-09-16T18:00:00",
+        "progress": 0,
+        "parentId": "Electrical & Instrumentation Crew",
+        "category": "Site task",
         "employee": {
             "id": "E1041",
             "name": "Arjun Taylor"
@@ -11047,6 +11415,70 @@
         "shift": "Night"
     },
     {
+        "title": "Pre-start toolbox talk",
+        "startDate": "2026-09-16T06:00:00",
+        "endDate": "2026-09-16T06:30:00",
+        "progress": 0,
+        "parentId": "Boilermakers & Welders Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1053",
+            "name": "Sophie Fernandes"
+        },
+        "role": "Leading Hand Boilermaker",
+        "crew": "Boilermakers & Welders",
+        "roster": "21/7 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Crane lift - conveyor section",
+        "startDate": "2026-09-16T07:30:00",
+        "endDate": "2026-09-16T11:00:00",
+        "progress": 0,
+        "parentId": "Boilermakers & Welders Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1053",
+            "name": "Sophie Fernandes"
+        },
+        "role": "Leading Hand Boilermaker",
+        "crew": "Boilermakers & Welders",
+        "roster": "21/7 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Confined space entry - transfer chute",
+        "startDate": "2026-09-16T09:00:00",
+        "endDate": "2026-09-16T13:00:00",
+        "progress": 0,
+        "parentId": "Boilermakers & Welders Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1053",
+            "name": "Sophie Fernandes"
+        },
+        "role": "Leading Hand Boilermaker",
+        "crew": "Boilermakers & Welders",
+        "roster": "21/7 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Isolation permit close-out",
+        "startDate": "2026-09-16T15:30:00",
+        "endDate": "2026-09-16T16:30:00",
+        "progress": 0,
+        "parentId": "Boilermakers & Welders Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1053",
+            "name": "Sophie Fernandes"
+        },
+        "role": "Leading Hand Boilermaker",
+        "crew": "Boilermakers & Welders",
+        "roster": "21/7 FIFO",
+        "shift": "Day"
+    },
+    {
         "title": "Swing 1 - Day shift",
         "startDate": "2026-09-07T00:00:00",
         "endDate": "2026-09-11T00:00:00",
@@ -11655,6 +12087,70 @@
         "shift": ""
     },
     {
+        "title": "Plant walkdown",
+        "startDate": "2026-11-16T06:45:00",
+        "endDate": "2026-11-16T08:00:00",
+        "progress": 0,
+        "parentId": "Boilermakers & Welders Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1055",
+            "name": "Amara Smith"
+        },
+        "role": "Boilermaker",
+        "crew": "Boilermakers & Welders",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Valve replacement - slurry line",
+        "startDate": "2026-11-16T08:30:00",
+        "endDate": "2026-11-16T14:30:00",
+        "progress": 0,
+        "parentId": "Boilermakers & Welders Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1055",
+            "name": "Amara Smith"
+        },
+        "role": "Boilermaker",
+        "crew": "Boilermakers & Welders",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Contractor induction",
+        "startDate": "2026-11-16T11:00:00",
+        "endDate": "2026-11-16T12:00:00",
+        "progress": 0,
+        "parentId": "Boilermakers & Welders Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1055",
+            "name": "Amara Smith"
+        },
+        "role": "Boilermaker",
+        "crew": "Boilermakers & Welders",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Handover to night crew",
+        "startDate": "2026-11-16T17:30:00",
+        "endDate": "2026-11-16T18:00:00",
+        "progress": 0,
+        "parentId": "Boilermakers & Welders Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1055",
+            "name": "Amara Smith"
+        },
+        "role": "Boilermaker",
+        "crew": "Boilermakers & Welders",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
         "title": "Swing 1 - Day shift",
         "startDate": "2026-09-03T00:00:00",
         "endDate": "2026-09-16T00:00:00",
@@ -11797,6 +12293,70 @@
         "crew": "Boilermakers & Welders",
         "roster": "14/14 FIFO",
         "shift": ""
+    },
+    {
+        "title": "Plant walkdown",
+        "startDate": "2026-09-16T06:45:00",
+        "endDate": "2026-09-16T08:00:00",
+        "progress": 0,
+        "parentId": "Boilermakers & Welders Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1056",
+            "name": "Siobhan Smith"
+        },
+        "role": "Coded Welder",
+        "crew": "Boilermakers & Welders",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Valve replacement - slurry line",
+        "startDate": "2026-09-16T08:30:00",
+        "endDate": "2026-09-16T14:30:00",
+        "progress": 0,
+        "parentId": "Boilermakers & Welders Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1056",
+            "name": "Siobhan Smith"
+        },
+        "role": "Coded Welder",
+        "crew": "Boilermakers & Welders",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Contractor induction",
+        "startDate": "2026-09-16T11:00:00",
+        "endDate": "2026-09-16T12:00:00",
+        "progress": 0,
+        "parentId": "Boilermakers & Welders Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1056",
+            "name": "Siobhan Smith"
+        },
+        "role": "Coded Welder",
+        "crew": "Boilermakers & Welders",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Handover to night crew",
+        "startDate": "2026-09-16T17:30:00",
+        "endDate": "2026-09-16T18:00:00",
+        "progress": 0,
+        "parentId": "Boilermakers & Welders Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1056",
+            "name": "Siobhan Smith"
+        },
+        "role": "Coded Welder",
+        "crew": "Boilermakers & Welders",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
     },
     {
         "title": "Swing 1 - Night shift",
@@ -14452,6 +15012,70 @@
         "shift": ""
     },
     {
+        "title": "Plant walkdown",
+        "startDate": "2026-09-29T06:45:00",
+        "endDate": "2026-09-29T08:00:00",
+        "progress": 0,
+        "parentId": "Rigging & Scaffolding Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1070",
+            "name": "Oliver Williams"
+        },
+        "role": "Crane Operator",
+        "crew": "Rigging & Scaffolding",
+        "roster": "8/6 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Valve replacement - slurry line",
+        "startDate": "2026-09-29T08:30:00",
+        "endDate": "2026-09-29T14:30:00",
+        "progress": 0,
+        "parentId": "Rigging & Scaffolding Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1070",
+            "name": "Oliver Williams"
+        },
+        "role": "Crane Operator",
+        "crew": "Rigging & Scaffolding",
+        "roster": "8/6 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Contractor induction",
+        "startDate": "2026-09-29T11:00:00",
+        "endDate": "2026-09-29T12:00:00",
+        "progress": 0,
+        "parentId": "Rigging & Scaffolding Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1070",
+            "name": "Oliver Williams"
+        },
+        "role": "Crane Operator",
+        "crew": "Rigging & Scaffolding",
+        "roster": "8/6 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Handover to night crew",
+        "startDate": "2026-09-29T17:30:00",
+        "endDate": "2026-09-29T18:00:00",
+        "progress": 0,
+        "parentId": "Rigging & Scaffolding Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1070",
+            "name": "Oliver Williams"
+        },
+        "role": "Crane Operator",
+        "crew": "Rigging & Scaffolding",
+        "roster": "8/6 FIFO",
+        "shift": "Day"
+    },
+    {
         "title": "Swing 1 - Night shift",
         "startDate": "2026-09-02T00:00:00",
         "endDate": "2026-09-06T00:00:00",
@@ -16391,7 +17015,7 @@
         "title": "Swing 2 - Day shift",
         "startDate": "2026-09-16T00:00:00",
         "endDate": "2026-09-23T00:00:00",
-        "progress": 0,
+        "progress": 13,
         "parentId": "Rigging & Scaffolding Crew",
         "category": "Day shift",
         "employee": {
@@ -19025,6 +19649,70 @@
         "shift": "Day"
     },
     {
+        "title": "Pre-start toolbox talk",
+        "startDate": "2026-09-26T06:00:00",
+        "endDate": "2026-09-26T06:30:00",
+        "progress": 0,
+        "parentId": "Supervision & HSE Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1088",
+            "name": "Hamish Jones"
+        },
+        "role": "Site Supervisor",
+        "crew": "Supervision & HSE",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Crane lift - conveyor section",
+        "startDate": "2026-09-26T07:30:00",
+        "endDate": "2026-09-26T11:00:00",
+        "progress": 0,
+        "parentId": "Supervision & HSE Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1088",
+            "name": "Hamish Jones"
+        },
+        "role": "Site Supervisor",
+        "crew": "Supervision & HSE",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Confined space entry - transfer chute",
+        "startDate": "2026-09-26T09:00:00",
+        "endDate": "2026-09-26T13:00:00",
+        "progress": 0,
+        "parentId": "Supervision & HSE Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1088",
+            "name": "Hamish Jones"
+        },
+        "role": "Site Supervisor",
+        "crew": "Supervision & HSE",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Isolation permit close-out",
+        "startDate": "2026-09-26T15:30:00",
+        "endDate": "2026-09-26T16:30:00",
+        "progress": 0,
+        "parentId": "Supervision & HSE Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1088",
+            "name": "Hamish Jones"
+        },
+        "role": "Site Supervisor",
+        "crew": "Supervision & HSE",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
         "title": "Site induction",
         "startDate": "2026-11-30T00:00:00",
         "endDate": "2026-11-30T00:00:00",
@@ -19591,6 +20279,70 @@
         "progress": 0,
         "parentId": "Supervision & HSE Crew",
         "category": "Day shift",
+        "employee": {
+            "id": "E1091",
+            "name": "Oliver Lee"
+        },
+        "role": "Site Administrator",
+        "crew": "Supervision & HSE",
+        "roster": "5/2 Residential",
+        "shift": "Day"
+    },
+    {
+        "title": "Pre-start toolbox talk",
+        "startDate": "2026-09-16T06:00:00",
+        "endDate": "2026-09-16T06:30:00",
+        "progress": 0,
+        "parentId": "Supervision & HSE Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1091",
+            "name": "Oliver Lee"
+        },
+        "role": "Site Administrator",
+        "crew": "Supervision & HSE",
+        "roster": "5/2 Residential",
+        "shift": "Day"
+    },
+    {
+        "title": "Crane lift - conveyor section",
+        "startDate": "2026-09-16T07:30:00",
+        "endDate": "2026-09-16T11:00:00",
+        "progress": 0,
+        "parentId": "Supervision & HSE Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1091",
+            "name": "Oliver Lee"
+        },
+        "role": "Site Administrator",
+        "crew": "Supervision & HSE",
+        "roster": "5/2 Residential",
+        "shift": "Day"
+    },
+    {
+        "title": "Confined space entry - transfer chute",
+        "startDate": "2026-09-16T09:00:00",
+        "endDate": "2026-09-16T13:00:00",
+        "progress": 0,
+        "parentId": "Supervision & HSE Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1091",
+            "name": "Oliver Lee"
+        },
+        "role": "Site Administrator",
+        "crew": "Supervision & HSE",
+        "roster": "5/2 Residential",
+        "shift": "Day"
+    },
+    {
+        "title": "Isolation permit close-out",
+        "startDate": "2026-09-16T15:30:00",
+        "endDate": "2026-09-16T16:30:00",
+        "progress": 0,
+        "parentId": "Supervision & HSE Crew",
+        "category": "Site task",
         "employee": {
             "id": "E1091",
             "name": "Oliver Lee"
@@ -20879,6 +21631,54 @@
         "crew": "Supervision & HSE",
         "roster": "14/14 FIFO",
         "shift": ""
+    },
+    {
+        "title": "Gearbox change-out",
+        "startDate": "2026-09-16T07:00:00",
+        "endDate": "2026-09-16T15:00:00",
+        "progress": 0,
+        "parentId": "Supervision & HSE Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1096",
+            "name": "Wei Singh"
+        },
+        "role": "Site Supervisor",
+        "crew": "Supervision & HSE",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Hot work permit - handrail repair",
+        "startDate": "2026-09-16T10:00:00",
+        "endDate": "2026-09-16T12:30:00",
+        "progress": 0,
+        "parentId": "Supervision & HSE Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1096",
+            "name": "Wei Singh"
+        },
+        "role": "Site Supervisor",
+        "crew": "Supervision & HSE",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
+    },
+    {
+        "title": "Scaffold handover inspection",
+        "startDate": "2026-09-16T15:00:00",
+        "endDate": "2026-09-16T16:00:00",
+        "progress": 0,
+        "parentId": "Supervision & HSE Crew",
+        "category": "Site task",
+        "employee": {
+            "id": "E1096",
+            "name": "Wei Singh"
+        },
+        "role": "Site Supervisor",
+        "crew": "Supervision & HSE",
+        "roster": "14/14 FIFO",
+        "shift": "Day"
     },
     {
         "title": "Swing 1 - Day shift",
