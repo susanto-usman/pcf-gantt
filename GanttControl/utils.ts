@@ -1,4 +1,4 @@
-import { Density, GanttRow, GanttTask, Timeline, TimelineBand, TimelineTick, TimeScale } from "./types";
+import { Density, GanttRow, GanttSelection, GanttTask, Timeline, TimelineBand, TimelineTick, TimeScale } from "./types";
 
 const MS_PER_DAY = 86400000;
 
@@ -57,8 +57,26 @@ export function isWeekend(date: Date): boolean {
     return day === 0 || day === 6;
 }
 
+/**
+ * Building an Intl formatter costs far more than formatting with one, and the
+ * timeline formats a label per column, so they are built once and kept.
+ */
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+export function formatWith(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+    const key = JSON.stringify(options);
+    let formatter = formatters.get(key);
+
+    if (!formatter) {
+        formatter = new Intl.DateTimeFormat(undefined, options);
+        formatters.set(key, formatter);
+    }
+
+    return formatter;
+}
+
 export function formatDate(date: Date): string {
-    return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+    return formatWith({ day: "numeric", month: "short", year: "numeric" }).format(date);
 }
 
 /** Prefix for synthesised merged-row ids, keeping them clear of record ids. */
@@ -111,7 +129,9 @@ function buildRowUnits(tasks: GanttTask[]): RowUnits {
             continue;
         }
 
-        const segments = (grouped.get(first.rowKey) ?? [first]).slice().sort((a, b) => a.start.getTime() - b.start.getTime());
+        const segments = (grouped.get(first.rowKey) ?? [first])
+            .slice()
+            .sort((a, b) => a.start.getTime() - b.start.getTime());
         let start = segments[0].start;
         let end = segments[0].end;
         let weight = 0;
@@ -146,6 +166,28 @@ function buildRowUnits(tasks: GanttTask[]): RowUnits {
 }
 
 /**
+ * What a click on a bar leaves selected. Clicking the selected bar again lets
+ * it go, and selecting a bar drops any selected row.
+ */
+export function selectTask(current: GanttSelection, taskId: string): GanttSelection {
+    return { taskId: current.taskId === taskId ? undefined : taskId };
+}
+
+/** The same for a row, which likewise drops any selected bar. */
+export function selectRow(current: GanttSelection, rowId: string): GanttSelection {
+    return { rowId: current.rowId === rowId ? undefined : rowId };
+}
+
+/**
+ * How a row is identified outside the control: a merged row by the Row field
+ * value it was built from, any other row by its record id. A merged row has no
+ * record of its own, so its synthesised id would mean nothing to the host.
+ */
+export function rowIdOf(row: GanttRow): string {
+    return row.task.rowKey ?? row.task.id;
+}
+
+/**
  * The record a merged row acts on when the row itself, rather than one of its
  * bars, is clicked or opened: the selected segment if there is one, otherwise
  * the one in progress or next up, falling back to the last.
@@ -157,6 +199,45 @@ export function pickSegment(row: GanttRow, selectedTaskId: string | undefined, t
         segments.find((segment) => segment.end >= today) ??
         segments[segments.length - 1]
     );
+}
+
+/**
+ * Share of a normal bar's height added per overlap level — one level deep is
+ * 1.75x a normal bar — and the gap the tallest bar leaves inside the row.
+ */
+const OVERLAP_GROWTH = 0.75;
+const OVERLAP_MARGIN = 2;
+
+/**
+ * Levels for bars sharing a merged row, in segment order. A bar that overlaps
+ * an earlier-starting one sits a level deeper: it is painted underneath and
+ * drawn taller, so it still shows above and below the bar covering it.
+ *
+ * Segments arrive ordered by start, as `buildRows` leaves them.
+ */
+export function overlapLevels(segments: { start: Date; end: Date }[]): number[] {
+    const levels: number[] = [];
+
+    for (let index = 0; index < segments.length; index++) {
+        let level = 0;
+
+        for (let before = 0; before < index; before++) {
+            // End dates are inclusive, so bars meeting on one day do overlap.
+            if (segments[before].end >= segments[index].start) {
+                level = Math.max(level, levels[before] + 1);
+            }
+        }
+
+        levels.push(level);
+    }
+
+    return levels;
+}
+
+/** Extra height for a bar at `level`, capped at what the row height allows. */
+export function overlapHeight(level: number, density: Density): number {
+    const headroom = ROW_HEIGHT[density] - OVERLAP_MARGIN * 2 - BAR_HEIGHT[density];
+    return Math.min(Math.round(level * OVERLAP_GROWTH * BAR_HEIGHT[density]), Math.max(0, headroom));
 }
 
 /**
@@ -383,7 +464,7 @@ export function buildTimeline(
             ticks.push({
                 start: cursor,
                 end: last,
-                label: cursor.toLocaleDateString(undefined, { day: "numeric", month: "short" }),
+                label: formatWith({ day: "numeric", month: "short" }).format(cursor),
                 isToday: today >= cursor && today <= last,
                 isNonWorking: false,
             });
@@ -397,7 +478,7 @@ export function buildTimeline(
             ticks.push({
                 start: cursor,
                 end: last,
-                label: cursor.toLocaleDateString(undefined, { month: "short" }),
+                label: formatWith({ month: "short" }).format(cursor),
                 isToday: today >= cursor && today <= last,
                 isNonWorking: false,
             });
@@ -417,19 +498,23 @@ export function buildTimeline(
 
 function buildBands(ticks: TimelineTick[], scale: TimeScale): TimelineBand[] {
     const bands: TimelineBand[] = [];
+    // Years for a month scale, months otherwise. Compared as a number so only a
+    // band boundary pays for a formatted label, not every column.
+    const bandOf = (date: Date) => (scale === "month" ? date.getFullYear() : date.getFullYear() * 12 + date.getMonth());
     const labelFor = (date: Date) =>
-        scale === "month"
-            ? String(date.getFullYear())
-            : date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+        scale === "month" ? String(date.getFullYear()) : formatWith({ month: "long", year: "numeric" }).format(date);
+
+    let current = NaN;
 
     for (const tick of ticks) {
-        const label = labelFor(tick.start);
+        const band = bandOf(tick.start);
         const previous = bands[bands.length - 1];
 
-        if (previous && previous.label === label) {
+        if (previous && band === current) {
             previous.span += 1;
         } else {
-            bands.push({ label, span: 1 });
+            current = band;
+            bands.push({ label: labelFor(tick.start), span: 1 });
         }
     }
 

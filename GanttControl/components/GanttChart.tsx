@@ -19,7 +19,7 @@ import {
     STATUS_TOKENS,
     useGanttStyles,
 } from "../styles";
-import { Density, GanttChartProps, TimeScale } from "../types";
+import { Density, GanttChartProps, GanttSelection, TimeScale } from "../types";
 import {
     BAR_HEIGHT,
     buildRows,
@@ -28,6 +28,9 @@ import {
     dateToOffset,
     getTaskExtent,
     ROW_HEIGHT,
+    rowIdOf,
+    selectRow,
+    selectTask,
     startOfDay,
     TaskStatus,
 } from "../utils";
@@ -69,6 +72,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     unmatchedFields,
     dateFieldNames,
     selectedTaskId,
+    selectedRowId,
     density: densityProp,
     timeScale: timeScaleProp,
     showToolbar,
@@ -79,6 +83,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     width,
     height,
     onSelect,
+    onSelectRow,
     onOpen,
     onLoadMore,
     start,
@@ -98,6 +103,44 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     const [scrollTop, setScrollTop] = React.useState(0);
     const [viewportHeight, setViewportHeight] = React.useState(height);
     const [today, setToday] = React.useState(() => startOfDay(new Date()));
+
+    /**
+     * The host echoes a selection back through updateView, a round trip the
+     * highlight should not wait for, so the chart holds it and the control
+     * follows. Props win whenever they disagree, which is how a selection made
+     * outside the control arrives.
+     */
+    const [selection, setSelection] = React.useState<GanttSelection>({ taskId: selectedTaskId, rowId: selectedRowId });
+    const selectionRef = React.useRef(selection);
+    selectionRef.current = selection;
+
+    React.useEffect(() => {
+        setSelection((current) =>
+            current.taskId === selectedTaskId && current.rowId === selectedRowId
+                ? current
+                : { taskId: selectedTaskId, rowId: selectedRowId }
+        );
+    }, [selectedTaskId, selectedRowId]);
+
+    const handleSelect = React.useCallback(
+        (taskId: string) => {
+            const next = selectTask(selectionRef.current, taskId);
+
+            setSelection(next);
+            onSelect(next.taskId);
+        },
+        [onSelect]
+    );
+
+    const handleSelectRow = React.useCallback(
+        (rowId: string) => {
+            const next = selectRow(selectionRef.current, rowId);
+
+            setSelection(next);
+            onSelectRow(next.rowId);
+        },
+        [onSelectRow]
+    );
     // Keyed by the mismatch itself, so fixing one setting and breaking another shows the notice again.
     const unmatchedKey = unmatchedFields.map((item) => `${item.setting}=${item.field}`).join("|");
     const [dismissedKey, setDismissedKey] = React.useState("");
@@ -343,16 +386,19 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     const todayOffset = showCurrentTime ? dateToOffset(today, timeline) : 0;
     const isTodayInRange = showCurrentTime && today >= timeline.start && today <= timeline.end;
 
+    // The row to highlight: the selected row itself, or the one carrying the
+    // selected record, which on a merged row is one of its segments.
+    const activeRowId = React.useMemo(() => {
+        const activeRow = selection.rowId
+            ? rows.find((row) => rowIdOf(row) === selection.rowId)
+            : selection.taskId
+              ? rows.find((row) => row.segments.some((segment) => segment.id === selection.taskId))
+              : undefined;
+        return activeRow?.task.id;
+    }, [rows, selection]);
     // Exactly one row carries tabIndex 0 so the grid is a single tab stop, and
     // it falls back to the first row when nothing is selected.
-    // The selection is a record id, which on a merged row is one of its segments.
-    const selectedRowId = React.useMemo(() => {
-        const selectedRow = selectedTaskId
-            ? rows.find((row) => row.segments.some((segment) => segment.id === selectedTaskId))
-            : undefined;
-        return selectedRow?.task.id;
-    }, [rows, selectedTaskId]);
-    const tabStopId = selectedRowId ?? rows[0]?.task.id;
+    const tabStopId = activeRowId ?? rows[0]?.task.id;
 
     const containerStyle = {
         // An explicit allocated width stops the timeline's content width from
@@ -365,6 +411,74 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         [cssVars.listWidth]: `${listWidth}px`,
         [cssVars.timelineWidth]: `${timeline.totalWidth}px`,
     } as React.CSSProperties;
+
+    /**
+     * A column per day over a year is hundreds of nodes, and neither the header
+     * nor the weekend shading depends on anything a click changes, so both are
+     * built once per timeline instead of once per render.
+     */
+    const timelineHeader = React.useMemo(
+        () => (
+            <div className={styles.timelinePane} role="columnheader" aria-label="Timeline">
+                <div className={styles.bandRow}>
+                    {timeline.bands.map((band, index) => (
+                        <div
+                            key={`${band.label}-${index}`}
+                            className={styles.bandCell}
+                            style={{ width: `${band.span * timeline.columnWidth}px` }}
+                        >
+                            <span className={styles.bandCellLabel}>{band.label}</span>
+                        </div>
+                    ))}
+                </div>
+                <div className={styles.tickRow}>
+                    {timeline.ticks.map((tick) => (
+                        <div
+                            key={tick.start.getTime()}
+                            className={mergeClasses(
+                                styles.tickCell,
+                                tick.isNonWorking && styles.tickCellNonWorking,
+                                tick.isToday && showCurrentTime && styles.tickCellToday
+                            )}
+                        >
+                            {tick.label}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        ),
+        [styles, timeline, showCurrentTime]
+    );
+
+    const weekendShading = React.useMemo(
+        () =>
+            // Weekend shading spans every row, so it is painted once here.
+            timeScale === "day" ? (
+                <div
+                    aria-hidden="true"
+                    style={{
+                        position: "absolute",
+                        inset: 0,
+                        left: `${listWidth}px`,
+                        pointerEvents: "none",
+                    }}
+                >
+                    {timeline.ticks.map((tick, index) =>
+                        tick.isNonWorking ? (
+                            <div
+                                key={`weekend-${tick.start.getTime()}`}
+                                className={styles.nonWorkingOverlay}
+                                style={{
+                                    left: `${index * timeline.columnWidth}px`,
+                                    width: `${timeline.columnWidth}px`,
+                                }}
+                            />
+                        ) : null
+                    )}
+                </div>
+            ) : null,
+        [styles, timeScale, timeline, listWidth]
+    );
 
     const toolbar = showToolbar ? (
         <GanttToolbar
@@ -511,61 +625,11 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                             />
                         </div>
 
-                        <div className={styles.timelinePane} role="columnheader" aria-label="Timeline">
-                            <div className={styles.bandRow}>
-                                {timeline.bands.map((band, index) => (
-                                    <div
-                                        key={`${band.label}-${index}`}
-                                        className={styles.bandCell}
-                                        style={{ width: `${band.span * timeline.columnWidth}px` }}
-                                    >
-                                        <span className={styles.bandCellLabel}>{band.label}</span>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className={styles.tickRow}>
-                                {timeline.ticks.map((tick) => (
-                                    <div
-                                        key={tick.start.getTime()}
-                                        className={mergeClasses(
-                                            styles.tickCell,
-                                            tick.isNonWorking && styles.tickCellNonWorking,
-                                            tick.isToday && showCurrentTime && styles.tickCellToday
-                                        )}
-                                    >
-                                        {tick.label}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                        {timelineHeader}
                     </div>
 
                     <div role="rowgroup" style={{ position: "relative" }}>
-                        {/* Weekend shading spans every row, so it is painted once here. */}
-                        {timeScale === "day" && (
-                            <div
-                                aria-hidden="true"
-                                style={{
-                                    position: "absolute",
-                                    inset: 0,
-                                    left: `${listWidth}px`,
-                                    pointerEvents: "none",
-                                }}
-                            >
-                                {timeline.ticks.map((tick, index) =>
-                                    tick.isNonWorking ? (
-                                        <div
-                                            key={`weekend-${tick.start.getTime()}`}
-                                            className={styles.nonWorkingOverlay}
-                                            style={{
-                                                left: `${index * timeline.columnWidth}px`,
-                                                width: `${timeline.columnWidth}px`,
-                                            }}
-                                        />
-                                    ) : null
-                                )}
-                            </div>
-                        )}
+                        {weekendShading}
 
                         {/* Positioned against the timeline pane, so it stays put while scrolling. */}
                         {isTodayInRange && (
@@ -588,13 +652,14 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                                 timeline={timeline}
                                 today={today}
                                 density={density}
-                                isSelected={row.task.id === selectedRowId}
+                                selection={row.task.id === activeRowId ? (selection.rowId ? "row" : "task") : "none"}
                                 // Only passed to the selected row, so the rest keep their memoised render.
-                                selectedTaskId={row.task.id === selectedRowId ? selectedTaskId : undefined}
+                                selectedTaskId={row.task.id === activeRowId ? selection.taskId : undefined}
                                 isTabStop={row.task.id === tabStopId}
                                 maxIndent={maxIndent}
                                 showProgress={showProgress}
-                                onSelect={onSelect}
+                                onSelect={handleSelect}
+                                onSelectRow={handleSelectRow}
                                 onOpen={onOpen}
                                 onToggleExpand={handleToggleExpand}
                             />

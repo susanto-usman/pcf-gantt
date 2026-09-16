@@ -8,7 +8,7 @@ import {
     Tooltip,
 } from "@fluentui/react-components";
 import * as React from "react";
-import { STATUS_LABELS, STATUS_TOKENS, useGanttStyles } from "../styles";
+import { cssVars, STATUS_LABELS, STATUS_TOKENS, useGanttStyles } from "../styles";
 import { GanttTask } from "../types";
 import { diffInDays, formatDate, TaskStatus } from "../utils";
 
@@ -22,6 +22,16 @@ export interface BarLayout {
     isMilestone: boolean;
 }
 
+/**
+ * Where a bar sits in a stack of overlapping bars on a merged row. Deeper bars
+ * are painted underneath and drawn taller, so they still show around the bar
+ * covering them.
+ */
+export interface BarOverlap {
+    extraHeight: number;
+    zIndex: number;
+}
+
 export interface GanttBarProps {
     task: GanttTask;
     layout: BarLayout;
@@ -29,6 +39,8 @@ export interface GanttBarProps {
     isSummary: boolean;
     /** Label of the merged row a segment belongs to, shown in its tooltip. */
     rowLabel?: string;
+    /** Set only for a bar that overlaps another on the same merged row. */
+    overlap?: BarOverlap;
     isSelected: boolean;
     showProgress: boolean;
     onSelect: (taskId: string) => void;
@@ -40,6 +52,7 @@ export const GanttBar: React.FC<GanttBarProps> = ({
     layout,
     isSummary,
     rowLabel,
+    overlap,
     isSelected,
     showProgress,
     onSelect,
@@ -189,7 +202,13 @@ export const GanttBar: React.FC<GanttBarProps> = ({
                 <div
                     {...shared}
                     className={styles.milestone}
-                    style={{ left: `${left + width / 2}px`, backgroundColor: palette.fill }}
+                    style={{
+                        left: `${left + width / 2}px`,
+                        backgroundColor: palette.fill,
+                        // A diamond is small enough to disappear behind a bar,
+                        // so the row hands it the top of the stack.
+                        zIndex: overlap?.zIndex,
+                    }}
                 />
             </Tooltip>
         );
@@ -200,7 +219,17 @@ export const GanttBar: React.FC<GanttBarProps> = ({
             <div
                 {...shared}
                 className={mergeClasses(styles.bar, isSelected && styles.barSelected)}
-                style={{ left: `${left}px`, width: `${width}px`, backgroundColor: palette.track }}
+                style={{
+                    left: `${left}px`,
+                    width: `${width}px`,
+                    backgroundColor: palette.track,
+                    // Every bar in the stack stays centred on the row, so the
+                    // added height shows above and below the bar on top.
+                    ...(overlap && {
+                        zIndex: overlap.zIndex,
+                        height: `calc(var(${cssVars.barHeight}) + ${overlap.extraHeight}px)`,
+                    }),
+                }}
             >
                 <div
                     className={styles.barFill}

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest>
-  <control namespace="Monadelphous" constructor="GanttControl" version="0.0.5" display-name-key="GanttControl" description-key="GanttControl description" control-type="virtual">
+  <control namespace="Monadelphous" constructor="GanttControl" version="0.0.7" display-name-key="GanttControl" description-key="GanttControl description" control-type="virtual">
     <external-service-usage enabled="false" />
 
     <data-set name="tasks" display-name-key="Tasks" cds-data-set-options="displayCommandBar:true;displayViewSelector:true;displayQuickFind:true" />
@@ -34,7 +34,8 @@
     <property name="groupRows" display-name-key="Group rows" description-key="Draws records that share a Row field value as separate bars on one row. When off, every record gets its own row." of-type="TwoOptions" usage="input" required="false" default-value="true" />
     <property name="showProgress" display-name-key="Show progress" description-key="Fills each bar in proportion to its progress value." of-type="TwoOptions" usage="input" required="false" default-value="true" />
 
-    <property name="selectedTaskId" display-name-key="Selected task" description-key="The taskId that the user selected in the control." of-type="SingleLine.Text" usage="bound" required="false" />
+    <property name="selectedTaskId" display-name-key="Selected task" description-key="The taskId of the bar the user selected. Empty while a row is selected." of-type="SingleLine.Text" usage="bound" required="false" />
+    <property name="selectedRowId" display-name-key="Selected row" description-key="The row the user selected: the Row field value when rows are grouped, otherwise the taskId of the row. Empty while a bar is selected." of-type="SingleLine.Text" usage="bound" required="false" />
 
     <resources>
       <code path="index.ts" order="1" />

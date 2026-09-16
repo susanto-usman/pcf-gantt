@@ -1,9 +1,18 @@
 import { Button, mergeClasses, ProgressBar, Text, tokens } from "@fluentui/react-components";
 import * as React from "react";
 import { useGanttStyles } from "../styles";
-import { Density, GanttRow, Timeline } from "../types";
-import { barGeometry, diffInDays, getTaskStatus, pickSegment } from "../utils";
-import { BarLayout, GanttBar } from "./GanttBar";
+import { Density, GanttRow, RowSelection, Timeline } from "../types";
+import {
+    barGeometry,
+    diffInDays,
+    formatWith,
+    getTaskStatus,
+    overlapHeight,
+    overlapLevels,
+    pickSegment,
+    rowIdOf,
+} from "../utils";
+import { BarLayout, BarOverlap, GanttBar } from "./GanttBar";
 import { ChevronDownIcon, ChevronRightIcon } from "./icons";
 
 export interface GanttTaskRowProps {
@@ -12,7 +21,8 @@ export interface GanttTaskRowProps {
     timeline: Timeline;
     today: Date;
     density: Density;
-    isSelected: boolean;
+    /** Whether the row is the selected one, merely holds the selected bar, or neither. */
+    selection: RowSelection;
     /** The selected record when it is on this row; tells a merged row which bar to highlight. */
     selectedTaskId: string | undefined;
     /** The single row in the roving tab sequence for the grid. */
@@ -21,6 +31,7 @@ export interface GanttTaskRowProps {
     maxIndent: number;
     showProgress: boolean;
     onSelect: (taskId: string) => void;
+    onSelectRow: (rowId: string) => void;
     onOpen: (taskId: string) => void;
     onToggleExpand: (taskId: string) => void;
 }
@@ -34,25 +45,43 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
     timeline,
     today,
     density,
-    isSelected,
+    selection,
     selectedTaskId,
     isTabStop,
     maxIndent,
     showProgress,
     onSelect,
+    onSelectRow,
     onOpen,
     onToggleExpand,
 }) => {
     const styles = useGanttStyles();
     const isDetailed = density === "comfortable";
+    const isRowSelected = selection === "row";
+    // The row the user picked is washed in brand and carries an accent edge; a
+    // row that merely holds the selected bar only gets the neutral wash.
+    const cellSelected = isRowSelected
+        ? styles.listCellRowSelected
+        : selection === "task"
+          ? styles.listCellSelected
+          : undefined;
 
     const start = row.hasChildren ? row.rollupStart : row.task.start;
     const end = row.hasChildren ? row.rollupEnd : row.task.end;
     const progress = row.hasChildren ? row.rollupProgress : row.task.progress;
     const status = getTaskStatus(start, end, progress, today);
 
-    // A merged row is not a record, so row-level actions go to one of its segments.
+    // Opening is a record action, and a merged row is not a record, so it goes
+    // to one of the row's segments. Selecting the row does not: it is the row
+    // the maker gets, with no record selected alongside it.
     const recordId = row.isMerged ? pickSegment(row, selectedTaskId, today).id : row.task.id;
+    const rowId = rowIdOf(row);
+
+    // Segments can overlap, which would leave the later one covering the
+    // earlier. Stack them instead: the later start goes underneath, taller, so
+    // it still shows around the bar on top of it.
+    const levels = React.useMemo(() => (row.isMerged ? overlapLevels(row.segments) : []), [row.isMerged, row.segments]);
+    const topOfStack = levels.length > 0 ? Math.max(...levels) : 0;
 
     const handleRowKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
         if (event.key === "Enter") {
@@ -60,7 +89,7 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
             onOpen(recordId);
         } else if (event.key === " ") {
             event.preventDefault();
-            onSelect(recordId);
+            onSelectRow(rowId);
         } else if (event.key === "ArrowRight" && row.hasChildren && !row.isExpanded) {
             event.preventDefault();
             onToggleExpand(row.task.id);
@@ -74,13 +103,17 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
         <div
             role="row"
             aria-rowindex={rowIndex + 2}
-            aria-selected={isSelected}
+            aria-selected={selection !== "none"}
             aria-level={row.depth + 1}
             aria-expanded={row.hasChildren ? row.isExpanded : undefined}
             tabIndex={isTabStop ? 0 : -1}
             data-task-id={row.task.id}
-            className={mergeClasses(styles.row, isSelected && styles.rowSelected)}
-            onClick={() => onSelect(recordId)}
+            className={mergeClasses(
+                styles.row,
+                isRowSelected && styles.rowSelected,
+                selection === "task" && styles.rowHighlighted
+            )}
+            onClick={() => onSelectRow(rowId)}
             onDoubleClick={() => onOpen(recordId)}
             onKeyDown={handleRowKeyDown}
         >
@@ -91,7 +124,8 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
                         styles.listCell,
                         "gantt-list-cell",
                         styles.listCellName,
-                        isSelected && styles.listCellSelected
+                        cellSelected,
+                        isRowSelected && styles.listCellAccent
                     )}
                     style={{
                         paddingInlineStart: `${BASE_INDENT + Math.min(row.depth * INDENT_PER_LEVEL, maxIndent)}px`,
@@ -131,7 +165,7 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
                             styles.listCell,
                             "gantt-list-cell",
                             styles.listCellProgressCompact,
-                            isSelected && styles.listCellSelected
+                            cellSelected
                         )}
                     >
                         {`${progress}%`}
@@ -146,7 +180,7 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
                                 styles.listCell,
                                 "gantt-list-cell",
                                 styles.listCellDate,
-                                isSelected && styles.listCellSelected
+                                cellSelected
                             )}
                         >
                             {shortDate(start)}
@@ -157,7 +191,7 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
                                 styles.listCell,
                                 "gantt-list-cell",
                                 styles.listCellDate,
-                                isSelected && styles.listCellSelected
+                                cellSelected
                             )}
                         >
                             {shortDate(end)}
@@ -169,7 +203,7 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
                                     styles.listCell,
                                     "gantt-list-cell",
                                     styles.listCellProgress,
-                                    isSelected && styles.listCellSelected
+                                    cellSelected
                                 )}
                             >
                                 <ProgressBar
@@ -192,30 +226,37 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
                     styles.timelinePane,
                     styles.track,
                     "gantt-track",
-                    isSelected && styles.trackSelected
+                    isRowSelected ? styles.trackRowSelected : selection === "task" && styles.trackSelected
                 )}
             >
                 <div className={styles.trackGrid} aria-hidden="true" />
                 {row.isMerged ? (
-                    row.segments.map((segment) => (
-                        <GanttBar
-                            key={segment.id}
-                            task={segment}
-                            layout={layoutFor(segment.start, segment.end, segment.progress, false, timeline, today)}
-                            isSummary={false}
-                            rowLabel={row.task.title}
-                            isSelected={segment.id === selectedTaskId}
-                            showProgress={showProgress}
-                            onSelect={onSelect}
-                            onOpen={onOpen}
-                        />
-                    ))
+                    row.segments.map((segment, index) => {
+                        const layout = layoutFor(segment.start, segment.end, segment.progress, false, timeline, today);
+
+                        return (
+                            <GanttBar
+                                key={segment.id}
+                                task={segment}
+                                layout={layout}
+                                isSummary={false}
+                                rowLabel={row.task.title}
+                                overlap={overlapFor(levels[index], topOfStack, layout.isMilestone, density)}
+                                isSelected={segment.id === selectedTaskId}
+                                showProgress={showProgress}
+                                onSelect={onSelect}
+                                onOpen={onOpen}
+                            />
+                        );
+                    })
                 ) : (
                     <GanttBar
                         task={row.task}
                         layout={layoutFor(start, end, progress, row.hasChildren, timeline, today)}
                         isSummary={row.hasChildren}
-                        isSelected={isSelected}
+                        // Selecting the row is not selecting its bar, so only a
+                        // bar the user picked carries the ring.
+                        isSelected={selection === "task"}
                         showProgress={showProgress}
                         onSelect={onSelect}
                         onOpen={onOpen}
@@ -225,6 +266,21 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
         </div>
     );
 };
+
+/**
+ * A bar's place in its row's stack: deeper levels are painted first and drawn
+ * taller. Milestones keep their size and ride on top, as a diamond has no room
+ * to spare.
+ */
+function overlapFor(level: number, topOfStack: number, isMilestone: boolean, density: Density): BarOverlap | undefined {
+    if (topOfStack === 0) {
+        return undefined;
+    }
+
+    return isMilestone
+        ? { extraHeight: 0, zIndex: topOfStack + 1 }
+        : { extraHeight: overlapHeight(level, density), zIndex: topOfStack - level };
+}
 
 function layoutFor(
     start: Date,
@@ -245,7 +301,7 @@ function layoutFor(
 }
 
 function shortDate(date: Date): string {
-    return date.toLocaleDateString(undefined, { day: "2-digit", month: "short" });
+    return formatWith({ day: "2-digit", month: "short" }).format(date);
 }
 
 export const GanttTaskRow = React.memo(GanttTaskRowInner);

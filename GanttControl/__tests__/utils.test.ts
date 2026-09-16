@@ -13,7 +13,11 @@ import {
     getTaskStatus,
     isSameDay,
     isWeekend,
+    overlapHeight,
+    overlapLevels,
     pickSegment,
+    selectRow,
+    selectTask,
     startOfMonth,
     startOfWeek,
 } from "../utils";
@@ -214,6 +218,68 @@ describe("pickSegment", () => {
 
     it("falls back to the last segment once all are past", () => {
         expect(pickSegment(row, undefined, d(2024, 3, 1)).id).toBe("later");
+    });
+});
+
+describe("selectTask and selectRow", () => {
+    it("lets go of whatever was clicked twice", () => {
+        expect(selectTask({ taskId: "a" }, "a")).toEqual({ taskId: undefined });
+        expect(selectRow({ rowId: "E1" }, "E1")).toEqual({ rowId: undefined });
+    });
+
+    it("never leaves a row and a task selected together", () => {
+        expect(selectTask({ rowId: "E1" }, "a")).toEqual({ taskId: "a" });
+        expect(selectRow({ taskId: "a" }, "E1")).toEqual({ rowId: "E1" });
+    });
+
+    it("moves the selection to whatever else is clicked", () => {
+        expect(selectTask({ taskId: "a" }, "b")).toEqual({ taskId: "b" });
+        expect(selectRow({ rowId: "E1" }, "E2")).toEqual({ rowId: "E2" });
+    });
+});
+
+describe("overlapLevels", () => {
+    const span = (start: number, end: number) => ({ start: d(2024, 1, start), end: d(2024, 1, end) });
+
+    it("keeps every bar at the top level when none overlap", () => {
+        expect(overlapLevels([span(1, 2), span(3, 4), span(5, 6)])).toEqual([0, 0, 0]);
+    });
+
+    it("pushes a later start under the bar it overlaps", () => {
+        expect(overlapLevels([span(1, 10), span(5, 12)])).toEqual([0, 1]);
+    });
+
+    it("counts end dates as inclusive", () => {
+        expect(overlapLevels([span(1, 5), span(5, 8)])).toEqual([0, 1]);
+        expect(overlapLevels([span(1, 5), span(6, 8)])).toEqual([0, 0]);
+    });
+
+    it("deepens the stack for each bar overlapped", () => {
+        expect(overlapLevels([span(1, 10), span(2, 8), span(3, 6)])).toEqual([0, 1, 2]);
+    });
+
+    it("starts a new stack once the bars are clear of each other", () => {
+        expect(overlapLevels([span(1, 10), span(2, 3), span(5, 9), span(20, 21)])).toEqual([0, 1, 1, 0]);
+    });
+
+    it("stacks under a bar that is itself stacked", () => {
+        expect(overlapLevels([span(1, 2), span(1, 10), span(4, 6)])).toEqual([0, 1, 2]);
+    });
+});
+
+describe("overlapHeight", () => {
+    it("draws the first level under an overlap at 1.75x a normal bar", () => {
+        // Comfortable bars are 20px, compact ones 14px.
+        expect(overlapHeight(0, "comfortable")).toBe(0);
+        expect(overlapHeight(1, "comfortable")).toBe(15);
+        expect(overlapHeight(1, "compact")).toBe(11);
+    });
+
+    it("stops growing before the bar fills the row", () => {
+        // 2x a normal bar, inside a 44px row; compact tops out just short.
+        expect(overlapHeight(2, "comfortable")).toBe(20);
+        expect(overlapHeight(9, "comfortable")).toBe(20);
+        expect(overlapHeight(9, "compact")).toBe(12);
     });
 });
 
