@@ -119,6 +119,15 @@ export function exclusiveEnd(end: Date): Date {
 /** Prefix for synthesised merged-row ids, keeping them clear of record ids. */
 const MERGED_ROW_PREFIX = "row:";
 
+/**
+ * Prefix for group heading ids. Exported because a heading is also selected by
+ * this id, which the control translates back to the group value it publishes.
+ */
+export const GROUP_ROW_PREFIX = "group:";
+
+/** The heading for records with no group value, once any record has one. */
+const NO_GROUP_TITLE = "(No value)";
+
 interface RowUnits {
     /** One task per row: plain tasks as-is, plus a synthesised task per row key. */
     units: GanttTask[];
@@ -193,6 +202,8 @@ function buildRowUnits(tasks: GanttTask[]): RowUnits {
             end,
             progress: weight > 0 ? Math.round(weightedProgress / weight) : 0,
             parentId: segments.find((segment) => segment.parentId)?.parentId ?? null,
+            groupKey: segments.find((segment) => segment.groupKey)?.groupKey ?? null,
+            groupTitle: segments.find((segment) => segment.groupTitle)?.groupTitle ?? null,
             category: categories.size === 1 ? segments[0].category : null,
             colorKey: colorKeys.size === 1 ? segments[0].colorKey : null,
             rowKey: first.rowKey,
@@ -224,7 +235,7 @@ export function selectRow(current: GanttSelection, rowId: string): GanttSelectio
 }
 
 /**
- * How a row is identified outside the control: a merged row by the Row field
+ * How a row is identified outside the control: a merged row by the row id
  * value it was built from, any other row by its record id. A merged row has no
  * record of its own, so its synthesised id would mean nothing to the host.
  */
@@ -320,26 +331,105 @@ function resolveParents(tasks: GanttTask[]): Map<string, string | null> {
     return resolved;
 }
 
+interface Hierarchy extends RowUnits {
+    /** Top-level nodes in order: group headings when grouping, otherwise the root units. */
+    roots: GanttTask[];
+    childrenOf: Map<string, GanttTask[]>;
+    groupIds: ReadonlySet<string>;
+}
+
+/**
+ * The tree the rows are walked from. Units hang under the parent they name;
+ * the ones left at the top are then gathered under a heading per group value,
+ * in the order the values first appear, with the valueless ones last. A task
+ * with a parent stays under its parent, whichever group it names itself.
+ */
+function buildHierarchy(tasks: GanttTask[]): Hierarchy {
+    const rowUnits = buildRowUnits(tasks);
+    const { units, weightOf } = rowUnits;
+    const parents = resolveParents(units);
+    const childrenOf = new Map<string, GanttTask[]>();
+    const topLevel: GanttTask[] = [];
+    const addChild = (parentId: string, child: GanttTask) => {
+        const siblings = childrenOf.get(parentId);
+
+        if (siblings) {
+            siblings.push(child);
+        } else {
+            childrenOf.set(parentId, [child]);
+        }
+    };
+
+    for (const task of units) {
+        const parentId = parents.get(task.id) ?? null;
+
+        if (parentId === null) {
+            topLevel.push(task);
+        } else {
+            addChild(parentId, task);
+        }
+    }
+
+    const groupIds = new Set<string>();
+
+    if (!units.some((task) => task.groupKey)) {
+        return { ...rowUnits, roots: topLevel, childrenOf, groupIds };
+    }
+
+    const headings = new Map<string, GanttTask>();
+
+    for (const task of topLevel) {
+        const key = task.groupKey ?? "";
+        let heading = headings.get(key);
+
+        if (!heading) {
+            heading = {
+                id: `${GROUP_ROW_PREFIX}${key}`,
+                title: key ? (task.groupTitle ?? key) : NO_GROUP_TITLE,
+                // Widened to its rows by the walk; a heading has no span of its own.
+                start: task.start,
+                end: task.end,
+                progress: 0,
+                parentId: null,
+                category: null,
+                colorKey: null,
+                rowKey: null,
+                rowTitle: null,
+                groupKey: key,
+                groupTitle: null,
+                isLocked: true,
+            };
+            headings.set(key, heading);
+            groupIds.add(heading.id);
+            // Weighs nothing, so rolled-up progress is its rows' alone.
+            weightOf.set(heading.id, 0);
+            rowUnits.segmentsOf.set(heading.id, []);
+        } else if (heading.title === key && task.groupTitle) {
+            // Titled by the first label any of its rows carries.
+            heading.title = task.groupTitle;
+        }
+
+        addChild(heading.id, task);
+    }
+
+    // Valueless records go last, so the named groups lead.
+    const roots = [...headings.values()].sort((a, b) => Number(a.groupKey === "") - Number(b.groupKey === ""));
+
+    return { ...rowUnits, roots, childrenOf, groupIds };
+}
+
 /**
  * Ids of every task that has children, regardless of what is currently
  * collapsed. Expand/collapse-all needs the full set, which the visible rows
  * cannot supply once a subtree is hidden.
  */
 export function collectParentIds(tasks: GanttTask[]): string[] {
-    const { units } = buildRowUnits(tasks);
-    const parents = resolveParents(units);
-    const withChildren = new Set<string>();
+    const { units, roots, childrenOf, groupIds } = buildHierarchy(tasks);
 
-    for (const task of units) {
-        const parentId = parents.get(task.id);
-
-        if (parentId) {
-            withChildren.add(parentId);
-        }
-    }
-
-    // Returned in task order so that collapse-all is deterministic.
-    return units.filter((task) => withChildren.has(task.id)).map((task) => task.id);
+    // Headings first, then the rest in task order, so collapse-all is deterministic.
+    return [...roots.filter((root) => groupIds.has(root.id)), ...units]
+        .filter((task) => childrenOf.has(task.id))
+        .map((task) => task.id);
 }
 
 /**
@@ -352,26 +442,7 @@ export function buildRows(tasks: GanttTask[], collapsedIds: ReadonlySet<string>)
         return [];
     }
 
-    const { units, segmentsOf, weightOf } = buildRowUnits(tasks);
-    const parents = resolveParents(units);
-    const childrenOf = new Map<string, GanttTask[]>();
-    const roots: GanttTask[] = [];
-
-    for (const task of units) {
-        const parentId = parents.get(task.id) ?? null;
-
-        if (parentId === null) {
-            roots.push(task);
-            continue;
-        }
-
-        const siblings = childrenOf.get(parentId);
-        if (siblings) {
-            siblings.push(task);
-        } else {
-            childrenOf.set(parentId, [task]);
-        }
-    }
+    const { units, segmentsOf, weightOf, roots, childrenOf, groupIds } = buildHierarchy(tasks);
 
     // A cycle in the parent references would leave tasks unreachable from any
     // root, so promote whatever the walk below never visits.
@@ -390,6 +461,7 @@ export function buildRows(tasks: GanttTask[], collapsedIds: ReadonlySet<string>)
             segments,
             // Only synthesised units carry a row key; their segments never become rows.
             isMerged: task.rowKey !== null,
+            isGroup: groupIds.has(task.id),
             depth,
             hasChildren,
             isExpanded,

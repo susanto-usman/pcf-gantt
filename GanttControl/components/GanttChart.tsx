@@ -33,7 +33,7 @@ import {
 import { EmptyReason, GanttEmptyState } from "./GanttEmptyState";
 import { GanttTaskRow } from "./GanttTaskRow";
 import { FilterChip, GanttToolbar } from "./GanttToolbar";
-import { DismissIcon } from "./icons";
+import { DismissIcon, SettingsIcon } from "./icons";
 
 /**
  * Detailed mode carries three extra fixed-width columns, so it needs a wider
@@ -90,6 +90,10 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     showCurrentTime,
     showProgress,
     showLegend,
+    showSettings,
+    onOpenSettings,
+    isPreviewing,
+    onDiscardPreview,
     canEdit,
     isLoading,
     hasNextPage,
@@ -640,6 +644,30 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         setLegendKeys(new Set());
     }, []);
 
+    // Kept within reach while previewing, even if the draft itself hides the button.
+    const openSettings = (showSettings || isPreviewing) && onOpenSettings ? onOpenSettings : undefined;
+
+    const previewNotice = isPreviewing ? (
+        <MessageBar intent="info" layout="multiline" style={{ flexShrink: 0 }}>
+            <MessageBarBody>
+                <MessageBarTitle>Previewing unsaved settings</MessageBarTitle>
+                Copy them from the settings panel into Field mapping and Options to keep them.
+            </MessageBarBody>
+            <MessageBarActions>
+                {onOpenSettings && (
+                    <Button size="small" onClick={onOpenSettings}>
+                        Open settings
+                    </Button>
+                )}
+                {onDiscardPreview && (
+                    <Button size="small" onClick={onDiscardPreview}>
+                        Discard
+                    </Button>
+                )}
+            </MessageBarActions>
+        </MessageBar>
+    ) : null;
+
     const toolbar = showToolbar ? (
         <GanttToolbar
             density={density}
@@ -656,6 +684,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
             onToggleAll={handleToggleAll}
             onScrollToToday={() => scrollToDate(today)}
             onFitToWidth={handleFitToWidth}
+            onOpenSettings={openSettings}
         />
     ) : null;
 
@@ -711,6 +740,12 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                         Load more
                     </Button>
                 )}
+                {/* The toolbar's own button is gone with the toolbar. */}
+                {!showToolbar && openSettings && (
+                    <Button appearance="subtle" size="small" icon={<SettingsIcon />} onClick={openSettings}>
+                        Settings
+                    </Button>
+                )}
             </span>
         </div>
     );
@@ -719,6 +754,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         return (
             <div className={styles.root} style={containerStyle}>
                 {toolbar}
+                {previewNotice}
                 <div className={styles.centred}>
                     <Spinner labelPosition="below" label="Loading tasks…" />
                 </div>
@@ -732,6 +768,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         return (
             <div className={styles.root} style={containerStyle}>
                 {toolbar}
+                {previewNotice}
                 <GanttEmptyState
                     reason={reason}
                     search={search}
@@ -740,8 +777,9 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                     availableColumns={availableColumns}
                     dateFieldNames={dateFieldNames}
                 />
-                {/* Kept when a filter emptied the chart, so the legend that did it can undo it. */}
-                {reason === "noMatches" && statusBar}
+                {/* Kept when a filter emptied the chart, so the legend that did it can undo it,
+                    and without a toolbar, so the settings stay within reach. */}
+                {(reason === "noMatches" || (!showToolbar && openSettings)) && statusBar}
             </div>
         );
     }
@@ -749,6 +787,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     return (
         <div className={styles.root} style={containerStyle}>
             {toolbar}
+            {previewNotice}
 
             {problemsKey && problemsKey !== dismissedProblemsKey && (
                 <MessageBar intent="warning" layout="multiline" style={{ flexShrink: 0 }}>

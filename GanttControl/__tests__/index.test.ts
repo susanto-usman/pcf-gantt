@@ -1,5 +1,6 @@
 import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
+import { GanttControlViewProps } from "../components/GanttControlView";
 import { GanttControl } from "../index";
 import { IInputs } from "../generated/ManifestTypes";
 import { GanttChartProps } from "../types";
@@ -11,8 +12,12 @@ interface MockOptions {
     rows: Row[];
     /** Column names; defaults to every key used by the rows. */
     columns?: string[];
-    /** Control properties, e.g. { titleField: "name", groupRows: false }. */
+    /** Plain control properties, e.g. { start: "2024-01-01" }. */
     settings?: Record<string, string | boolean | null>;
+    /** The Field mapping property, written as JSON the way JSON({...}) would. */
+    fields?: Record<string, unknown>;
+    /** The Options property, likewise. */
+    options?: Record<string, unknown>;
     formatted?: Record<string, Record<string, string>>;
     links?: { to: string; alias: string }[];
     loading?: boolean;
@@ -48,6 +53,12 @@ function mockContext(options: MockOptions) {
     for (const [name, raw] of Object.entries(options.settings ?? {})) {
         parameters[name] = { raw };
     }
+    if (options.fields) {
+        parameters.fields = { raw: JSON.stringify(options.fields) };
+    }
+    if (options.options) {
+        parameters.options = { raw: JSON.stringify(options.options) };
+    }
 
     const context = {
         parameters,
@@ -57,21 +68,27 @@ function mockContext(options: MockOptions) {
     return { context, dataset };
 }
 
+/** The view updateView hands back, which the chart's props are built from. */
+function viewOf(control: GanttControl, context: ComponentFramework.Context<IInputs>): GanttControlViewProps {
+    const provider = control.updateView(context) as React.ReactElement<{ children: React.ReactElement }>;
+    return provider.props.children.props as GanttControlViewProps;
+}
+
+/** The chart's props for the saved settings, as the view builds them with no draft open. */
+function renderAgain(control: GanttControl, context: ComponentFramework.Context<IInputs>): GanttChartProps {
+    const view = viewOf(control, context);
+    return view.build(view.fields, view.options);
+}
+
 function render(options: MockOptions) {
     const control = new GanttControl();
     const notify = vi.fn();
     const { context, dataset } = mockContext(options);
 
     control.init(context, notify);
-    const provider = control.updateView(context) as React.ReactElement<{ children: React.ReactElement }>;
-    const props = provider.props.children.props as GanttChartProps;
+    const props = renderAgain(control, context);
 
     return { control, context, dataset, notify, props };
-}
-
-function renderAgain(control: GanttControl, context: ComponentFramework.Context<IInputs>): GanttChartProps {
-    const provider = control.updateView(context) as React.ReactElement<{ children: React.ReactElement }>;
-    return provider.props.children.props as GanttChartProps;
 }
 
 const d = (year: number, month: number, day: number) => new Date(year, month - 1, day);
@@ -109,6 +126,8 @@ describe("GanttControl", () => {
                 colorKey: null,
                 rowKey: null,
                 rowTitle: null,
+                groupKey: null,
+                groupTitle: null,
                 isLocked: false,
             },
         ]);
@@ -171,7 +190,7 @@ describe("GanttControl", () => {
     it("honours configured field names, case-insensitively, and prefers formatted text", () => {
         const { props } = render({
             rows: [{ id: "1", Name: "raw", From: "2024-01-01", To: "2024-01-02", Kind: 3 }],
-            settings: { titleField: "name", startField: "from", endField: "to", categoryField: "kind" },
+            fields: { task: "name", start: "from", end: "to", category: "kind" },
             formatted: { "1": { Name: "Formatted", Kind: "Leave" } },
         });
 
@@ -185,7 +204,7 @@ describe("GanttControl", () => {
                 { id: "1", title: "A", startDate: "2024-01-01", endDate: "2024-01-02", kind: "Leave", shift: "Night" },
                 { id: "2", title: "B", startDate: "2024-01-01", endDate: "2024-01-02", kind: "Leave", shift: null },
             ],
-            settings: { categoryField: "kind", colorField: "shift" },
+            fields: { category: "kind", colour: "shift" },
         });
 
         expect(props.tasks.map((task) => task.colorKey)).toEqual(["Night", "Leave"]);
@@ -200,19 +219,29 @@ describe("GanttControl", () => {
     it("passes the maker's colour settings through to the chart", () => {
         const { props } = render({
             rows: [{ id: "1", title: "A", startDate: "2024-01-01", endDate: "2024-01-02" }],
-            settings: { colorMode: "field", colorLegend: " Planned=#0078D4 ", showLegend: false },
+            options: { colorBy: "field", legend: " Planned=#0078D4 ", showLegend: false },
         });
 
         expect(props).toMatchObject({ colorMode: "field", colorLegend: "Planned=#0078D4", showLegend: false });
     });
 
-    it("falls back to the status scheme when the colour mode is not one it knows", () => {
+    it("falls back to the status scheme when the colour mode is not one it knows, and says so", () => {
         const { props } = render({
             rows: [{ id: "1", title: "A", startDate: "2024-01-01", endDate: "2024-01-02" }],
-            settings: { colorMode: "rainbow" },
+            options: { colorBy: "rainbow" },
         });
 
         expect(props.colorMode).toBe("status");
+        expect(props.settingProblems).toEqual(['Options: colorBy "rainbow" is not one of status, field']);
+    });
+
+    it("takes a legend written as JSON inside the options", () => {
+        const { props } = render({
+            rows: [{ id: "1", title: "A", startDate: "2024-01-01", endDate: "2024-01-02" }],
+            options: { legend: { Planned: "#0078D4" } },
+        });
+
+        expect(props.colorLegend).toBe('{"Planned":"#0078D4"}');
     });
 
     it("reads a property off a lookup value, including JSON text and EntityReferences", () => {
@@ -233,7 +262,7 @@ describe("GanttControl", () => {
                     resource: { id: { guid: "guid-1" }, name: "Mere Smith" },
                 },
             ],
-            settings: { rowField: "resource.id", rowTitleField: "resource.name" },
+            fields: { row: { id: "resource.id", label: "resource.name" } },
         });
 
         expect(props.tasks.map((task) => [task.rowKey, task.rowTitle])).toEqual([
@@ -245,7 +274,7 @@ describe("GanttControl", () => {
     it("resolves a dotted field through a linked entity column", () => {
         const { props } = render({
             rows: [{ id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-01", "a_1.fullname": "Linked" }],
-            settings: { rowTitleField: "resource.fullname" },
+            fields: { row: "resource.fullname" },
             links: [{ to: "resource", alias: "a_1" }],
         });
 
@@ -256,21 +285,24 @@ describe("GanttControl", () => {
     it("drops row keys when grouping is switched off", () => {
         const { props } = render({
             rows: [{ id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-01", emp: "E1" }],
-            settings: { rowField: "emp", groupRows: false },
+            fields: { row: "emp" },
+            options: { groupRows: false },
         });
 
         expect(props.tasks[0].rowKey).toBeNull();
     });
 
-    it("reports field settings that match no column", () => {
+    it("reports field mappings that match no column, leaving the defaults the maker never set alone", () => {
         const { props } = render({
             rows: [{ id: "1", startDate: "2024-01-01", endDate: "2024-01-01" }],
-            settings: { rowField: "employee.name" },
+            fields: { row: { id: "employee.id", label: "staff.name" } },
+            // No progress, parent or id column, but none of those was asked for.
+            columns: ["startDate", "endDate", "employee"],
         });
 
         expect(props.unmatchedFields).toEqual([
-            { setting: "Title field", field: "title" },
-            { setting: "Row field", field: "employee.name" },
+            { setting: "task.label", field: "title" },
+            { setting: "row.label", field: "staff.name" },
         ]);
         expect(props.tasks[0].title).toBe("Untitled task");
     });
@@ -278,9 +310,10 @@ describe("GanttControl", () => {
     it("falls back to defaults for missing or invalid display settings", () => {
         const { props } = render({
             rows: [],
-            settings: { density: "roomy", timeScale: "week", showToolbar: false },
+            options: { density: "roomy", timeScale: "week", showToolbar: "false" },
         });
 
+        expect(props.settingProblems).toEqual(['Options: density "roomy" is not one of comfortable, compact']);
         expect(props).toMatchObject({
             density: "comfortable",
             timeScale: "week",
@@ -335,7 +368,7 @@ describe("GanttControl", () => {
                 { id: "r2", title: "Swing 2", startDate: "2024-01-10", endDate: "2024-01-11", crew: "Mech" },
                 { id: "r3", title: "Solo", startDate: "2024-01-01", endDate: "2024-01-02", crew: "Elec" },
             ],
-            settings: { rowField: "crew" },
+            fields: { row: "crew" },
         });
 
         props.onSelectRow("Mech");
@@ -353,6 +386,24 @@ describe("GanttControl", () => {
         props.onSelectRow("Elec");
 
         expect(selection(control)).toEqual({ selectedTaskId: undefined, selectedRowId: "Elec" });
+    });
+
+    it("publishes a group heading by its group value and selects every record under it", () => {
+        const { props, dataset, control } = render({
+            rows: [
+                { id: "r1", title: "Swing 1", startDate: "2024-01-01", endDate: "2024-01-02", crew: "Mech" },
+                { id: "r2", title: "Swing 2", startDate: "2024-01-10", endDate: "2024-01-11", crew: "Elec" },
+                { id: "r3", title: "Swing 3", startDate: "2024-01-01", endDate: "2024-01-02", crew: "Mech" },
+            ],
+            fields: { group: "crew" },
+        });
+
+        expect(props.tasks.map((task) => task.groupKey)).toEqual(["Mech", "Elec", "Mech"]);
+
+        props.onSelectRow("group:Mech");
+
+        expect(dataset.setSelectedRecordIds).toHaveBeenLastCalledWith(["r1", "r3"]);
+        expect(selection(control)).toEqual({ selectedTaskId: undefined, selectedRowId: "Mech" });
     });
 
     it("clears the row when the chart reports no row selected", () => {
@@ -375,7 +426,7 @@ describe("GanttControl", () => {
                 { id: "r1", code: "E1", title: "T", startDate: "2024-01-01", endDate: "2024-01-01" },
                 { id: "r2", code: "E2", title: "U", startDate: "2024-01-01", endDate: "2024-01-01" },
             ],
-            settings: { idField: "code" },
+            fields: { task: { id: "code", label: "title" } },
         });
 
         expect(props.tasks.map((task) => task.id)).toEqual(["E1", "E2"]);
@@ -399,7 +450,7 @@ describe("GanttControl", () => {
                 { id: "r1", code: "E1", title: "T", startDate: "2024-01-01", endDate: "2024-01-01" },
                 { id: "r2", code: "E1", title: "U", startDate: "2024-01-01", endDate: "2024-01-01" },
             ],
-            settings: { idField: "code" },
+            fields: { task: { id: "code", label: "title" } },
         });
 
         // Sharing an id would leave the chart unable to tell the two apart.
@@ -448,7 +499,7 @@ describe("GanttControl", () => {
     it("reads the editing settings and keeps the same object while they hold", () => {
         const { control, context, props } = render({
             rows: [{ id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-01" }],
-            settings: { allowMove: true, allowResize: false },
+            options: { allowMove: true, allowResize: false },
         });
 
         expect(props.canEdit).toEqual({ move: true, resize: false });
@@ -459,7 +510,7 @@ describe("GanttControl", () => {
     it("publishes nothing until an edit is made", () => {
         const { control } = render({
             rows: [{ id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-03" }],
-            settings: { allowMove: true },
+            options: { allowMove: true },
         });
 
         expect(control.getOutputs().lastEdit).toBe("");
@@ -468,7 +519,7 @@ describe("GanttControl", () => {
     it("publishes a drag as one JSON value, without touching the dataset", () => {
         const { props, control, dataset, notify } = render({
             rows: [{ id: "1", title: "Mobilisation", startDate: "2024-01-01", endDate: "2024-01-03" }],
-            settings: { allowMove: true },
+            options: { allowMove: true },
         });
 
         props.onEdit({
@@ -495,7 +546,7 @@ describe("GanttControl", () => {
     it("stamps every edit, so repeating one still changes the value the host sees", () => {
         const { props, control } = render({
             rows: [{ id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-03" }],
-            settings: { allowResize: true },
+            options: { allowResize: true },
         });
         const edit = {
             action: "resize",
@@ -530,7 +581,7 @@ describe("GanttControl", () => {
                 // A choice column: anything that is not plainly a "no" locks it.
                 { id: "reason", title: "I", startDate: "2024-01-01", endDate: "2024-01-02", frozen: "Approved" },
             ],
-            settings: { lockedField: "frozen" },
+            fields: { locked: "frozen" },
         });
 
         expect(props.tasks.filter((task) => task.isLocked).map((task) => task.id)).toEqual([
@@ -544,7 +595,7 @@ describe("GanttControl", () => {
     it("prefers a two-options column's formatted label over its raw value", () => {
         const { props } = render({
             rows: [{ id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-02", frozen: "1" }],
-            settings: { lockedField: "frozen" },
+            fields: { locked: "frozen" },
             formatted: { "1": { frozen: "No" } },
         });
 
@@ -563,7 +614,7 @@ describe("GanttControl", () => {
         const control = new GanttControl();
         const notify = vi.fn();
         const rows = [{ id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-02", frozen: false }];
-        const { context } = mockContext({ rows, settings: { lockedField: "frozen" } });
+        const { context } = mockContext({ rows, fields: { locked: "frozen" } });
 
         control.init(context, notify);
         const before = renderAgain(control, context).tasks;
@@ -618,5 +669,109 @@ describe("timeline boundaries", () => {
 
         expect(props.start).toBeUndefined();
         expect(props.end).toBeUndefined();
+    });
+});
+
+describe("settings view", () => {
+    const rows = [
+        { id: "1", title: "Swing", startDate: "2024-01-01", endDate: "2024-01-02", crew: "Mech", name: "Aroha" },
+    ];
+
+    it("hands the view the saved settings, the columns and a builder", () => {
+        const control = new GanttControl();
+        const { context } = mockContext({ rows, options: { showSettings: true } });
+
+        control.init(context, vi.fn());
+        const view = viewOf(control, context);
+
+        expect(view.fields).toBe("");
+        expect(JSON.parse(view.options)).toEqual({ showSettings: true });
+        expect(view.columns).toEqual(["id", "title", "startDate", "endDate", "crew", "name"]);
+        expect(view.build(view.fields, view.options).showSettings).toBe(true);
+        // A fresh version per update, since the records can change under the same settings.
+        expect(viewOf(control, context).version).toBe(view.version + 1);
+    });
+
+    it("offers the properties of lookup and record columns, and related columns by their lookup", () => {
+        const control = new GanttControl();
+        const { context } = mockContext({
+            rows: [
+                // Blank on the first record, so the shape has to come from a later one.
+                { id: "1", title: "A", startDate: "2024-01-01", endDate: "2024-01-01", employee: null, owner: null },
+                {
+                    id: "2",
+                    title: "B",
+                    startDate: "2024-01-01",
+                    endDate: "2024-01-01",
+                    employee: '{"id":"E1001","name":"Aroha Patel","crew":{"name":"Mech"}}',
+                    owner: { id: { guid: "g-1" }, name: "Mere", etn: "systemuser" },
+                    "a_1.fullname": "Linked",
+                },
+            ],
+            links: [{ to: "resource", alias: "a_1" }],
+        });
+
+        control.init(context, vi.fn());
+
+        expect(viewOf(control, context).columns).toEqual([
+            "id",
+            "title",
+            "startDate",
+            "endDate",
+            "employee",
+            "employee.id",
+            "employee.name",
+            "owner",
+            "owner.id",
+            "owner.name",
+            "owner.etn",
+            "resource.fullname",
+        ]);
+    });
+
+    it("builds a draft without the host saving it, and back again", () => {
+        const control = new GanttControl();
+        const { context, dataset } = mockContext({ rows });
+
+        control.init(context, vi.fn());
+        const view = viewOf(control, context);
+        const draft = view.build('{"task":"name","group":"crew"}', '{"density":"compact"}');
+
+        expect(draft.tasks[0]).toMatchObject({ title: "Aroha", groupKey: "Mech" });
+        expect(draft.density).toBe("compact");
+
+        // Selection still reaches the records the draft drew.
+        draft.onSelectRow("group:Mech");
+        expect(dataset.setSelectedRecordIds).toHaveBeenLastCalledWith(["1"]);
+
+        const saved = view.build(view.fields, view.options);
+        expect(saved.tasks[0]).toMatchObject({ title: "Swing", groupKey: null });
+    });
+});
+
+describe("applying settings", () => {
+    const rows = [{ id: "1", title: "Swing", startDate: "2024-01-01", endDate: "2024-01-02", crew: "Mech" }];
+
+    it("publishes nothing until settings are applied", () => {
+        const { control } = render({ rows });
+
+        expect(control.getOutputs()).toMatchObject({ draftFields: "", draftOptions: "" });
+    });
+
+    it("publishes both settings as compact JSON and tells the host", () => {
+        const control = new GanttControl();
+        const notify = vi.fn();
+        const { context, dataset } = mockContext({ rows });
+
+        control.init(context, notify);
+        viewOf(control, context).onApply('{\n    "group": "crew"\n}', '{ "density": "compact" }');
+
+        expect(control.getOutputs()).toMatchObject({
+            draftFields: '{"group":"crew"}',
+            draftOptions: '{"density":"compact"}',
+        });
+        expect(notify).toHaveBeenCalledTimes(1);
+        // Applying is about the settings alone: no record is touched or selected.
+        expect(dataset.setSelectedRecordIds).not.toHaveBeenCalled();
     });
 });

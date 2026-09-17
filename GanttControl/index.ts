@@ -1,9 +1,10 @@
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import * as React from "react";
-import { GanttChart } from "./components/GanttChart";
+import { GanttControlView } from "./components/GanttControlView";
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
-import { ColorMode, Density, EditPermissions, GanttTask, TaskEdit, TimeScale } from "./types";
-import { exclusiveEnd, startOfDay, toLocalIso } from "./utils";
+import { DEFAULT_FIELDS, FieldSettings, KeyedField, OptionSettings, parseFields, parseOptions } from "./settings";
+import { EditPermissions, GanttChartProps, GanttTask, TaskEdit } from "./types";
+import { exclusiveEnd, GROUP_ROW_PREFIX, startOfDay, toLocalIso } from "./utils";
 
 type DatasetRecord = ComponentFramework.PropertyHelper.DataSetApi.EntityRecord;
 
@@ -70,6 +71,9 @@ function toText(value: unknown): string | null {
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
+/** Records the settings panel reads to find the properties on lookup columns. */
+const SAMPLED_RECORDS = 25;
+
 /** Values a flag column can carry that mean "no", whatever the host's data type. */
 const FALSEY = new Set(["false", "no", "n", "0", "off", "unlocked"]);
 
@@ -93,25 +97,26 @@ function sameTasks(previous: GanttTask[], next: GanttTask[]): boolean {
             was.colorKey === task.colorKey &&
             was.rowKey === task.rowKey &&
             was.rowTitle === task.rowTitle &&
+            was.groupKey === task.groupKey &&
+            was.groupTitle === task.groupTitle &&
             was.isLocked === task.isLocked
         );
     });
 }
 
-const DENSITIES: Density[] = ["comfortable", "compact"];
-const TIME_SCALES: TimeScale[] = ["day", "week", "month"];
-const COLOR_MODES: ColorMode[] = ["status", "field"];
-
 export class GanttControl implements ComponentFramework.ReactControl<IInputs, IOutputs> {
     private notifyOutputChanged: () => void;
+    private context: ComponentFramework.Context<IInputs>;
+    /** Counts updateView calls, so the view knows the data may have moved even when the settings have not. */
+    private updateCount = 0;
     private selectedTaskId: string | undefined;
     private selectedRowId: string | undefined;
     /**
-     * Task id to dataset record id. The ID field lets a task be identified by a
+     * Task id to dataset record id. The task id mapping lets a task be identified by a
      * column rather than by the record, and the host only ever knows the record.
      */
     private recordIdOf = new Map<string, string>();
-    /** Row id to the record ids drawn on that row, which a merged row has several of. */
+    /** Row id to the record ids drawn on that row, which a merged row or a group heading has several of. */
     private rowRecordIds = new Map<string, string[]>();
     /** The dataset from the current updateView, so the handlers below can stay stable. */
     private dataset: ComponentFramework.PropertyTypes.DataSet | undefined;
@@ -129,6 +134,13 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
      * stamp in the JSON, dragging a bar back where it was would reach nobody.
      */
     private changeStamp = 0;
+    /**
+     * Settings the maker applied from the settings panel, as compact JSON, for
+     * the app to store and feed back into Field mapping and Options. A control
+     * cannot write its own input properties, so this is the only way back.
+     */
+    private draftFields = "";
+    private draftOptions = "";
 
     public init(context: ComponentFramework.Context<IInputs>, notifyOutputChanged: () => void): void {
         this.notifyOutputChanged = notifyOutputChanged;
@@ -138,40 +150,68 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
     }
 
     public updateView(context: ComponentFramework.Context<IInputs>): React.ReactElement {
+        this.context = context;
+        this.dataset = context.parameters.tasks;
+        this.updateCount += 1;
+
+        // fluentDesignLanguage carries the host's live theme (light, dark or
+        // high contrast); webLightTheme is only the standalone-harness fallback.
+        return React.createElement(
+            FluentProvider,
+            {
+                theme: context.fluentDesignLanguage?.tokenTheme ?? webLightTheme,
+                style: { width: "100%", height: "100%", backgroundColor: "transparent" },
+            },
+            React.createElement(GanttControlView, {
+                fields: context.parameters.fields?.raw ?? "",
+                options: context.parameters.options?.raw ?? "",
+                columns: this.columnChoices(this.dataset),
+                build: this.buildChart,
+                version: this.updateCount,
+                onApply: this.handleApplySettings,
+            })
+        );
+    }
+
+    /**
+     * The chart's props for a pair of settings. The view calls this with the
+     * saved settings, or with a draft from the settings panel while a maker is
+     * trying one out, so the chart can be previewed without a round trip to the
+     * host. It reads the dataset from the latest updateView.
+     */
+    private readonly buildChart = (fieldsText: string, optionsText: string): GanttChartProps => {
+        const context = this.context;
         const dataset = context.parameters.tasks;
-
-        this.dataset = dataset;
-
-        const built = this.buildTasks(context, dataset);
+        const fields = parseFields(fieldsText);
+        const options = parseOptions(optionsText);
+        const built = this.buildTasks(dataset, fields.value, options.value.groupRows);
 
         // The chart derives the rows, the timeline and the parent index from
         // this array, so handing back the same instance when the records have
         // not changed keeps a selection from rebuilding all of it.
         this.tasks = sameTasks(this.tasks, built) ? this.tasks : built;
 
-        const tasks = this.tasks;
         const paging = dataset.paging;
 
-        const chart = React.createElement(GanttChart, {
-            tasks,
+        return {
+            tasks: this.tasks,
             recordCount: dataset.sortedRecordIds ? dataset.sortedRecordIds.length : 0,
             availableColumns: (dataset.columns ?? []).map((column) => column.name),
-            unmatchedFields: this.findUnmatchedFields(context, dataset),
-            dateFieldNames: {
-                start: this.readFieldName(context, "startField", "startDate"),
-                end: this.readFieldName(context, "endField", "endDate"),
-            },
+            unmatchedFields: this.findUnmatchedFields(dataset, fields.value, options.value.groupRows),
+            settingProblems: [...fields.problems, ...options.problems],
+            dateFieldNames: { start: fields.value.start, end: fields.value.end },
             selectedTaskId: this.selectedTaskId,
             selectedRowId: this.selectedRowId,
-            density: this.readEnum(context, "density", DENSITIES, "comfortable"),
-            timeScale: this.readEnum(context, "timeScale", TIME_SCALES, "day"),
-            colorMode: this.readEnum(context, "colorMode", COLOR_MODES, "status"),
-            colorLegend: this.readString(context, "colorLegend", ""),
-            showToolbar: this.readBoolean(context, "showToolbar", true),
-            showCurrentTime: this.readBoolean(context, "showCurrentTime", true),
-            showProgress: this.readBoolean(context, "showProgress", true),
-            showLegend: this.readBoolean(context, "showLegend", true),
-            canEdit: this.readPermissions(context),
+            density: options.value.density,
+            timeScale: options.value.timeScale,
+            colorMode: options.value.colorBy,
+            colorLegend: options.value.legend,
+            showToolbar: options.value.showToolbar,
+            showCurrentTime: options.value.showCurrentTime,
+            showProgress: options.value.showProgress,
+            showLegend: options.value.showLegend,
+            showSettings: options.value.showSettings,
+            canEdit: this.readPermissions(options.value),
             isLoading: dataset.loading,
             hasNextPage: Boolean(paging && paging.hasNextPage),
             width: context.mode.allocatedWidth > 0 ? context.mode.allocatedWidth : 0,
@@ -185,19 +225,8 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             onLoadMore: this.handleLoadMore,
             start: this.readBoundary(context.parameters.start),
             end: this.readBoundary(context.parameters.end),
-        });
-
-        // fluentDesignLanguage carries the host's live theme (light, dark or
-        // high contrast); webLightTheme is only the standalone-harness fallback.
-        return React.createElement(
-            FluentProvider,
-            {
-                theme: context.fluentDesignLanguage?.tokenTheme ?? webLightTheme,
-                style: { width: "100%", height: "100%", backgroundColor: "transparent" },
-            },
-            chart
-        );
-    }
+        };
+    };
 
     /** The chart resolves what a click selects; the control only publishes it. */
     private readonly handleSelect = (taskId: string | undefined): void => {
@@ -243,6 +272,13 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
         this.notifyOutputChanged();
     };
 
+    private readonly handleApplySettings = (fields: string, options: string): void => {
+        // Compact, as the app stores it in a text column rather than showing it.
+        this.draftFields = JSON.stringify(JSON.parse(fields));
+        this.draftOptions = JSON.stringify(JSON.parse(options));
+        this.notifyOutputChanged();
+    };
+
     private readonly handleLoadMore = (): void => {
         const paging = this.dataset?.paging;
 
@@ -276,8 +312,14 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
     public getOutputs(): IOutputs {
         return {
             selectedTaskId: this.selectedTaskId,
-            selectedRowId: this.selectedRowId,
+            // A group heading is published by its group value, which is what an
+            // app filters on; the prefix only keeps it apart from row keys inside.
+            selectedRowId: this.selectedRowId?.startsWith(GROUP_ROW_PREFIX)
+                ? this.selectedRowId.slice(GROUP_ROW_PREFIX.length)
+                : this.selectedRowId,
             lastEdit: this.lastEdit,
+            draftFields: this.draftFields,
+            draftOptions: this.draftOptions,
         };
     }
 
@@ -286,11 +328,8 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
      * back while the settings hold, since a fresh one would re-render every
      * visible row on each update.
      */
-    private readPermissions(context: ComponentFramework.Context<IInputs>): EditPermissions {
-        const next: EditPermissions = {
-            move: this.readBoolean(context, "allowMove", false),
-            resize: this.readBoolean(context, "allowResize", false),
-        };
+    private readPermissions(options: OptionSettings): EditPermissions {
+        const next: EditPermissions = { move: options.allowMove, resize: options.allowResize };
         const current = this.canEdit;
 
         if (current.move === next.move && current.resize === next.resize) {
@@ -306,8 +345,9 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
     }
 
     private buildTasks(
-        context: ComponentFramework.Context<IInputs>,
-        dataset: ComponentFramework.PropertyTypes.DataSet
+        dataset: ComponentFramework.PropertyTypes.DataSet,
+        fields: FieldSettings,
+        groupRows: boolean
     ): GanttTask[] {
         const tasks: GanttTask[] = [];
 
@@ -321,25 +361,25 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             return tasks;
         }
 
-        const field = (propertyName: keyof IInputs, fallback: string) =>
-            this.resolveField(dataset, this.readFieldName(context, propertyName, fallback));
+        const field = (name: string) => this.resolveField(dataset, name);
         const unset: FieldRef = { column: "", property: null };
 
-        const idField = field("idField", "id");
-        const titleField = field("titleField", "title");
-        const startField = field("startField", "startDate");
-        const endField = field("endField", "endDate");
-        const progressField = field("progressField", "progress");
-        const parentField = field("parentField", "parentId");
-        const categoryField = field("categoryField", "");
+        const idField = field(fields.task.id);
+        const titleField = field(fields.task.label);
+        const startField = field(fields.start);
+        const endField = field(fields.end);
+        const progressField = field(fields.progress);
+        const parentField = field(fields.parent);
+        const categoryField = field(fields.category);
         // Colouring falls back to the category, so the common "colour by
         // category" case needs no second setting.
-        const colorField = field("colorField", "");
-        const lockedField = field("lockedField", "");
-        // Grouping is switched off by blanking the row key, so no record shares a row.
-        const groupRows = this.readBoolean(context, "groupRows", true);
-        const rowField = groupRows ? field("rowField", "") : unset;
-        const rowTitleField = groupRows ? field("rowTitleField", "") : unset;
+        const colorField = field(fields.color);
+        const lockedField = field(fields.locked);
+        const groupField = field(fields.group.id);
+        const groupTitleField = field(fields.group.label);
+        // Merging is switched off by blanking the row key, so no record shares a row.
+        const rowField = groupRows ? field(fields.row.id) : unset;
+        const rowTitleField = groupRows ? field(fields.row.label) : unset;
 
         for (const recordId of dataset.sortedRecordIds) {
             const record = dataset.records[recordId];
@@ -363,17 +403,17 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             const id = customId !== null && !this.recordIdOf.has(customId) ? customId : recordId;
 
             const rowKey = this.readText(record, rowField);
-            // Mirrors rowIdOf: a grouped row is known by its Row field value,
+            // Mirrors rowIdOf: a grouped row is known by its row id value,
             // and any other row by the one task it carries.
             const rowId = rowKey ?? id;
-            const onRow = this.rowRecordIds.get(rowId);
 
             this.recordIdOf.set(id, recordId);
-            if (onRow) {
-                onRow.push(recordId);
-            } else {
-                this.rowRecordIds.set(rowId, [recordId]);
-            }
+            this.addToRow(rowId, recordId);
+
+            // Mirrors buildRows, which gathers records without a value under a
+            // heading of their own once any record has one.
+            const groupKey = this.readText(record, groupField);
+            this.addToRow(`${GROUP_ROW_PREFIX}${groupKey ?? ""}`, recordId);
 
             const category = this.readText(record, categoryField);
 
@@ -390,11 +430,23 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
                 colorKey: this.readText(record, colorField) ?? category,
                 rowKey,
                 rowTitle: this.readText(record, rowTitleField),
+                groupKey,
+                groupTitle: groupKey === null ? null : this.readText(record, groupTitleField),
                 isLocked: this.readFlag(record, lockedField),
             });
         }
 
         return tasks;
+    }
+
+    private addToRow(rowId: string, recordId: string): void {
+        const onRow = this.rowRecordIds.get(rowId);
+
+        if (onRow) {
+            onRow.push(recordId);
+        } else {
+            this.rowRecordIds.set(rowId, [recordId]);
+        }
     }
 
     /**
@@ -444,13 +496,14 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
     }
 
     /**
-     * Field settings that match no column once resolved, so a maker sees why a
-     * field reads as empty instead of guessing. Only settings the maker filled
-     * in are checked, plus the title, whose absence shows as "Untitled task".
+     * Field mappings that match no column once resolved, so a maker sees why a
+     * field reads as empty instead of guessing. Only mappings the maker changed
+     * are checked, plus the task label, whose absence shows as "Untitled task".
      */
     private findUnmatchedFields(
-        context: ComponentFramework.Context<IInputs>,
-        dataset: ComponentFramework.PropertyTypes.DataSet
+        dataset: ComponentFramework.PropertyTypes.DataSet,
+        fields: FieldSettings,
+        groupRows: boolean
     ): { setting: string; field: string }[] {
         const columns = new Set((dataset.columns ?? []).map((column) => column.name.toLowerCase()));
 
@@ -459,30 +512,100 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             return [];
         }
 
-        const settings: [keyof IInputs, string, string][] = [
-            ["idField", "ID field", "id"],
-            ["titleField", "Title field", "title"],
-            ["startField", "Start field", ""],
-            ["endField", "End field", ""],
-            ["progressField", "Progress field", ""],
-            ["parentField", "Parent field", ""],
-            ["categoryField", "Category field", ""],
-            ["colorField", "Colour field", ""],
-            ["lockedField", "Locked field", ""],
-            ["rowField", "Row field", ""],
-            ["rowTitleField", "Row title field", ""],
+        // [setting, column, default]: a column left at its default is not reported.
+        const keyed = (name: string, pair: KeyedField, fallback: KeyedField): [string, string, string][] =>
+            pair.id === pair.label
+                ? [[name, pair.id, fallback.id]]
+                : [
+                      [`${name}.id`, pair.id, fallback.id],
+                      [`${name}.label`, pair.label, fallback.label],
+                  ];
+
+        const settings: [string, string, string][] = [
+            ["task.id", fields.task.id, DEFAULT_FIELDS.task.id],
+            // The title is checked even at its default, as its absence is what the user sees.
+            ["task.label", fields.task.label, ""],
+            ["start", fields.start, DEFAULT_FIELDS.start],
+            ["end", fields.end, DEFAULT_FIELDS.end],
+            ["progress", fields.progress, DEFAULT_FIELDS.progress],
+            ["parent", fields.parent, DEFAULT_FIELDS.parent],
+            ...keyed("group", fields.group, DEFAULT_FIELDS.group),
+            ...(groupRows ? keyed("row", fields.row, DEFAULT_FIELDS.row) : []),
+            ["category", fields.category, ""],
+            ["color", fields.color, ""],
+            ["locked", fields.locked, ""],
         ];
         const unmatched: { setting: string; field: string }[] = [];
 
-        for (const [propertyName, setting, fallback] of settings) {
-            const field = this.readFieldName(context, propertyName, fallback);
-
-            if (field && !columns.has(this.resolveField(dataset, field).column.toLowerCase())) {
+        for (const [setting, field, fallback] of settings) {
+            if (field && field !== fallback && !columns.has(this.resolveField(dataset, field).column.toLowerCase())) {
                 unmatched.push({ setting, field });
             }
         }
 
         return unmatched;
+    }
+
+    /**
+     * What the settings panel offers to pick from: every column, and for a
+     * column holding a lookup or record, each property on it (employee.id,
+     * employee.name) as the field mappings read them. Related columns from the
+     * view are offered by their lookup rather than their link alias. Properties
+     * are sampled from the first records, since a lookup left blank on one
+     * record says nothing about its shape.
+     */
+    private columnChoices(dataset: ComponentFramework.PropertyTypes.DataSet): string[] {
+        const choices: string[] = [];
+        const seen = new Set<string>();
+        const add = (name: string) => {
+            if (!seen.has(name.toLowerCase())) {
+                seen.add(name.toLowerCase());
+                choices.push(name);
+            }
+        };
+        const links = this.readLinkedEntities(dataset);
+        const sample = (dataset.sortedRecordIds ?? [])
+            .slice(0, SAMPLED_RECORDS)
+            .map((recordId) => dataset.records[recordId])
+            .filter((record) => record !== undefined);
+
+        for (const { name } of dataset.columns ?? []) {
+            const dot = name.indexOf(".");
+            const link =
+                dot > 0
+                    ? links.find((item) => item.alias.toLowerCase() === name.slice(0, dot).toLowerCase())
+                    : undefined;
+
+            add(link ? `${link.to}${name.slice(dot)}` : name);
+
+            for (const record of sample) {
+                let value: unknown;
+
+                try {
+                    value = parseJsonObject(record.getValue(name));
+                } catch {
+                    continue;
+                }
+
+                if (value === null || typeof value !== "object" || value instanceof Date || Array.isArray(value)) {
+                    continue;
+                }
+
+                for (const [property, item] of Object.entries(value as Record<string, unknown>)) {
+                    // Only what reads as text: a guid-wrapped id does, a nested record does not.
+                    const readable =
+                        item === null ||
+                        ["string", "number", "boolean"].indexOf(typeof item) >= 0 ||
+                        (typeof item === "object" && "guid" in item);
+
+                    if (readable) {
+                        add(`${name}.${property}`);
+                    }
+                }
+            }
+        }
+
+        return choices;
     }
 
     /** Hosts vary in how much of the linking API they carry, so any gap reads as no links. */
@@ -494,47 +617,6 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
         } catch {
             return [];
         }
-    }
-
-    /** A text property's value, trimmed, or the fallback when it is blank. */
-    private readString(
-        context: ComponentFramework.Context<IInputs>,
-        propertyName: keyof IInputs,
-        fallback: string
-    ): string {
-        const property = context.parameters[propertyName] as
-            ComponentFramework.PropertyTypes.StringProperty | undefined;
-        const raw = property && typeof property.raw === "string" ? property.raw.trim() : "";
-        return raw.length > 0 ? raw : fallback;
-    }
-
-    private readFieldName(
-        context: ComponentFramework.Context<IInputs>,
-        propertyName: keyof IInputs,
-        fallback: string
-    ): string {
-        return this.readString(context, propertyName, fallback);
-    }
-
-    private readBoolean(
-        context: ComponentFramework.Context<IInputs>,
-        propertyName: keyof IInputs,
-        fallback: boolean
-    ): boolean {
-        const property = context.parameters[propertyName] as
-            ComponentFramework.PropertyTypes.TwoOptionsProperty | undefined;
-        return property && typeof property.raw === "boolean" ? property.raw : fallback;
-    }
-
-    private readEnum<T extends string>(
-        context: ComponentFramework.Context<IInputs>,
-        propertyName: keyof IInputs,
-        allowed: T[],
-        fallback: T
-    ): T {
-        const property = context.parameters[propertyName] as { raw?: string } | undefined;
-        const raw = property && typeof property.raw === "string" ? (property.raw as T) : undefined;
-        return raw && allowed.indexOf(raw) >= 0 ? raw : fallback;
     }
 
     /** The field's raw value: the column's own, or the named property of a record-valued column. */

@@ -19,6 +19,10 @@ export interface GanttTask {
     rowKey: string | null;
     /** Label for the merged row this task belongs to; the row key is shown when absent. */
     rowTitle: string | null;
+    /** The Group field value; records sharing one are gathered under a heading row. */
+    groupKey?: string | null;
+    /** Label for that heading; the group key is shown when absent. */
+    groupTitle?: string | null;
     /** True when the record refuses to be moved or resized, whatever the maker has allowed. */
     isLocked: boolean;
 }
@@ -34,6 +38,8 @@ export interface GanttRow {
     segments: GanttTask[];
     /** True when the row was built from a row key rather than a single record. */
     isMerged: boolean;
+    /** True for a group heading, which stands for no record and only gathers the rows under it. */
+    isGroup: boolean;
     depth: number;
     hasChildren: boolean;
     isExpanded: boolean;
@@ -114,11 +120,13 @@ export interface GanttChartProps {
     availableColumns: string[];
     /** Field settings that name a column the dataset does not have, e.g. { setting: "Title field", field: "resource.name" }. */
     unmatchedFields: { setting: string; field: string }[];
+    /** Parts of the Field mapping and Options settings that could not be used, worded for the maker. */
+    settingProblems: string[];
     /** The start/end column names currently configured. */
     dateFieldNames: { start: string; end: string };
     /** The selected record; a row and a task are never selected at once. */
     selectedTaskId?: string;
-    /** The selected row: a Row field value when grouping, otherwise a task id. */
+    /** The selected row: a group heading or merged row by its internal row id, otherwise a task id. */
     selectedRowId?: string;
     density: Density;
     timeScale: TimeScale;
@@ -130,6 +138,14 @@ export interface GanttChartProps {
     showCurrentTime: boolean;
     showProgress: boolean;
     showLegend: boolean;
+    /** Shows the settings button, which only a maker should see. */
+    showSettings: boolean;
+    /** Opens the settings panel; supplied by the view, not by the control. */
+    onOpenSettings?: () => void;
+    /** True while the chart shows draft settings rather than the saved ones. */
+    isPreviewing?: boolean;
+    /** Drops the draft and goes back to the saved settings. */
+    onDiscardPreview?: () => void;
     /** Whether the user may move or resize a bar. Both off leaves the chart read-only. */
     canEdit: EditPermissions;
     isLoading: boolean;

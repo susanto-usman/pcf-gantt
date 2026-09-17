@@ -22,6 +22,7 @@ import {
     DensityIcon,
     FitToWidthIcon,
     SearchIcon,
+    SettingsIcon,
     ZoomInIcon,
     ZoomOutIcon,
 } from "./icons";
@@ -53,6 +54,8 @@ export interface GanttToolbarProps {
     onToggleAll: () => void;
     onScrollToToday: () => void;
     onFitToWidth: () => void;
+    /** Opens the maker's settings panel; the button is left out when undefined. */
+    onOpenSettings?: () => void;
 }
 
 export const GanttToolbar: React.FC<GanttToolbarProps> = ({
@@ -70,6 +73,7 @@ export const GanttToolbar: React.FC<GanttToolbarProps> = ({
     onToggleAll,
     onScrollToToday,
     onFitToWidth,
+    onOpenSettings,
 }) => {
     const styles = useGanttStyles();
     const scaleIndex = SCALE_ORDER.indexOf(timeScale);
@@ -220,6 +224,15 @@ export const GanttToolbar: React.FC<GanttToolbarProps> = ({
                         </MenuList>
                     </MenuPopover>
                 </Menu>
+
+                {onOpenSettings && (
+                    <>
+                        <ToolbarDivider />
+                        <Tooltip content="Chart settings" relationship="label">
+                            <ToolbarButton appearance="subtle" icon={<SettingsIcon />} onClick={onOpenSettings} />
+                        </Tooltip>
+                    </>
+                )}
             </div>
         </Toolbar>
     );

@@ -192,6 +192,70 @@ describe("buildRows", () => {
         expect(rows[0].task.title).toBe("E1");
         expect(rows[0].task.category).toBeNull();
     });
+
+    it("gathers top-level rows under a heading per group, in order of appearance, valueless last", () => {
+        const tasks = [
+            task({ id: "loose", start: d(2024, 3, 1), end: d(2024, 3, 1) }),
+            task({ id: "m1", groupKey: "mech", start: d(2024, 1, 1), end: d(2024, 1, 2), progress: 100 }),
+            task({ id: "e1", groupKey: "elec", groupTitle: "Electrical" }),
+            task({ id: "m2", groupKey: "mech", groupTitle: "Mechanical", start: d(2024, 1, 9), end: d(2024, 1, 10) }),
+        ];
+
+        const rows = buildRows(tasks, none);
+
+        expect(rows.map((row) => [row.task.id, row.depth, row.isGroup])).toEqual([
+            ["group:mech", 0, true],
+            ["m1", 1, false],
+            ["m2", 1, false],
+            ["group:elec", 0, true],
+            ["e1", 1, false],
+            ["group:", 0, true],
+            ["loose", 1, false],
+        ]);
+
+        const [mech] = rows;
+        // Titled by the first label its rows carry, even when that is not the first row.
+        expect(mech.task.title).toBe("Mechanical");
+        expect(rows[3].task.title).toBe("Electrical");
+        expect(rows[5].task.title).toBe("(No value)");
+        // A heading spans its rows and weighs nothing itself: 2 days at 100, 2 at 0.
+        expect(mech.rollupStart).toEqual(d(2024, 1, 1));
+        expect(mech.rollupEnd).toEqual(d(2024, 1, 10));
+        expect(mech.rollupProgress).toBe(50);
+    });
+
+    it("keeps a child under its parent whatever group it names, and groups merged rows", () => {
+        const tasks = [
+            task({ id: "p", groupKey: "mech" }),
+            task({ id: "c", parentId: "p", groupKey: "elec" }),
+            task({ id: "s1", rowKey: "E1", groupKey: "elec" }),
+            task({ id: "s2", rowKey: "E1" }),
+        ];
+
+        const rows = buildRows(tasks, none);
+
+        expect(rows.map((row) => [row.task.id, row.depth])).toEqual([
+            ["group:mech", 0],
+            ["p", 1],
+            ["c", 2],
+            ["group:elec", 0],
+            ["row:E1", 1],
+        ]);
+    });
+
+    it("collapses a group heading like any parent", () => {
+        const rows = buildRows(
+            [task({ id: "a", groupKey: "g" }), task({ id: "b", groupKey: "g" })],
+            new Set(["group:g"])
+        );
+
+        expect(rows.map((row) => row.task.id)).toEqual(["group:g"]);
+        expect(rows[0].isExpanded).toBe(false);
+    });
+
+    it("adds no headings when no task names a group", () => {
+        expect(buildRows([task({ id: "a" })], none).map((row) => row.isGroup)).toEqual([false]);
+    });
 });
 
 describe("collectParentIds", () => {
@@ -204,6 +268,12 @@ describe("collectParentIds", () => {
         ];
 
         expect(collectParentIds(tasks)).toEqual(["team", "row:E1"]);
+    });
+
+    it("lists group headings first", () => {
+        const tasks = [task({ id: "p", groupKey: "g" }), task({ id: "c", parentId: "p" })];
+
+        expect(collectParentIds(tasks)).toEqual(["group:g", "p"]);
     });
 });
 

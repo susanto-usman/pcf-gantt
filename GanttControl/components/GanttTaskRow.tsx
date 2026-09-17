@@ -96,10 +96,17 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
     const levels = React.useMemo(() => (row.isMerged ? overlapLevels(row.segments) : []), [row.isMerged, row.segments]);
     const topOfStack = levels.length > 0 ? Math.max(...levels) : 0;
 
+    // A group heading is no record, so there is nothing for it to open.
+    const openRow = () => {
+        if (!row.isGroup) {
+            onOpen(recordId);
+        }
+    };
+
     const handleRowKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
         if (event.key === "Enter") {
             event.preventDefault();
-            onOpen(recordId);
+            openRow();
         } else if (event.key === " ") {
             event.preventDefault();
             onSelectRow(rowId);
@@ -127,7 +134,7 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
                 selection === "task" && styles.rowHighlighted
             )}
             onClick={() => onSelectRow(rowId)}
-            onDoubleClick={() => onOpen(recordId)}
+            onDoubleClick={openRow}
             onKeyDown={handleRowKeyDown}
         >
             <div className={styles.listPane}>

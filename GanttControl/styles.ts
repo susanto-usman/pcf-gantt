@@ -582,6 +582,61 @@ export const useGanttStyles = makeStyles({
         borderRadius: tokens.borderRadiusSmall,
         flexShrink: 0,
     },
+    /** Settings panel ---------------------------------------------------- */
+    settingsSection: {
+        display: "flex",
+        flexDirection: "column",
+        rowGap: tokens.spacingVerticalM,
+        paddingBlock: tokens.spacingVerticalS,
+    },
+    /** Two fields side by side, stacking when the drawer is narrow. */
+    settingsPair: {
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+        columnGap: tokens.spacingHorizontalM,
+        rowGap: tokens.spacingVerticalM,
+    },
+    settingsGroup: {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        rowGap: tokens.spacingVerticalXXS,
+    },
+    settingsGroupLabel: {
+        ...typographyStyles.caption1Strong,
+        color: tokens.colorNeutralForeground2,
+    },
+    settingsOutput: {
+        display: "flex",
+        flexDirection: "column",
+        rowGap: tokens.spacingVerticalS,
+        width: "100%",
+    },
+    settingsOutputHeader: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        flexWrap: "wrap",
+        columnGap: tokens.spacingHorizontalS,
+    },
+    settingsCode: {
+        fontFamily: tokens.fontFamilyMonospace,
+        height: "120px",
+    },
+    settingsActions: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        flexWrap: "wrap",
+        columnGap: tokens.spacingHorizontalS,
+        rowGap: tokens.spacingVerticalXS,
+    },
+    settingsCopied: {
+        ...typographyStyles.caption1,
+        color: tokens.colorNeutralForeground3,
+        marginInlineEnd: "auto",
+    },
+
     centred: {
         display: "flex",
         flexDirection: "column",

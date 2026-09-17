@@ -20,52 +20,150 @@ and high contrast, in both model-driven and canvas apps.
 
 ### What works today
 
-| Area          | Behaviour                                                                                                                                                                                                    |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Density       | **Detailed** and **Compact** modes, switchable from the toolbar or preset by a maker property. Detailed adds Start, Finish and Progress columns and taller rows.                                             |
-| Time scale    | Day, week and month zoom levels, plus **Fit to width**.                                                                                                                                                      |
-| Hierarchy     | `parentField` builds a task tree with expand/collapse. Parent rows show a summary bracket spanning their children and a duration-weighted rolled-up progress.                                                |
-| Merged rows   | With `rowField` set and `groupRows` on, many records share one row as separate bars. Clicking a bar selects that record; clicking the row selects its current or next segment.                               |
-| Status        | Bars are coloured on track / at risk / overdue / complete / not started, derived from progress against elapsed time.                                                                                         |
-| Colours       | Or colour by any field instead, with your own colours and legend labels — see [Colours and the legend](#colours-and-the-legend).                                                                             |
-| Toolbar       | Fluent `Toolbar` with search, collapse-all, today, zoom, fit and density controls.                                                                                                                           |
-| Data          | Dataset paging is loaded progressively as the user scrolls, so the chart is not limited to the first page.                                                                                                   |
-| Performance   | Rows are windowed, so only the visible slice is rendered.                                                                                                                                                    |
-| Editing       | Drag a bar to reschedule it, or drag either end to resize it. Off by default, and `lockedField` exempts individual records; the control publishes each edit and your app saves it — see [Editing](#editing). |
-| Accessibility | Grid semantics, a keyboard-resizable splitter, a roving tab stop, and Fluent tooltips on every bar.                                                                                                          |
+| Area          | Behaviour                                                                                                                                                                                                      |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Density       | **Detailed** and **Compact** modes, switchable from the toolbar or preset by a maker property. Detailed adds Start, Finish and Progress columns and taller rows.                                               |
+| Time scale    | Day, week and month zoom levels, plus **Fit to width**.                                                                                                                                                        |
+| Hierarchy     | `fields.parent` builds a task tree with expand/collapse. Parent rows show a summary bracket spanning their children and a duration-weighted rolled-up progress.                                                |
+| Groups        | `fields.group` gathers rows under a heading per value (a crew, a department) without any heading records in the data.                                                                                          |
+| Merged rows   | With `fields.row` set, many records share one row as separate bars. Clicking a bar selects that record; clicking the row selects the whole row.                                                                |
+| Status        | Bars are coloured on track / at risk / overdue / complete / not started, derived from progress against elapsed time.                                                                                           |
+| Colours       | Or colour by any field instead, with your own colours and legend labels — see [Colours and the legend](#colours-and-the-legend).                                                                               |
+| Toolbar       | Fluent `Toolbar` with search, collapse-all, today, zoom, fit and density controls.                                                                                                                             |
+| Data          | Dataset paging is loaded progressively as the user scrolls, so the chart is not limited to the first page.                                                                                                     |
+| Performance   | Rows are windowed, so only the visible slice is rendered.                                                                                                                                                      |
+| Editing       | Drag a bar to reschedule it, or drag either end to resize it. Off by default, and `fields.locked` exempts individual records; the control publishes each edit and your app saves it — see [Editing](#editing). |
+| Accessibility | Grid semantics, a keyboard-resizable splitter, a roving tab stop, and Fluent tooltips on every bar.                                                                                                            |
 
 ### Properties
 
-| Property                                                          | Type          | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ----------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tasks`                                                           | Dataset       | The task records.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `start` / `end`                                                   | Text          | Optional timeline boundary, as a date such as `2026-01-01`. Blank uses the earliest and latest task dates.                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `titleField` / `startField` / `endField`                          | Text          | Column names for the task label and its dates. Records without both dates are skipped.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| _(any field setting)_                                             | Text          | Accepts `lookup.column`, e.g. `resource.name`, to read a column from the table a lookup points at. Resolved in order: a column literally named that (e.g. a flattened `resource.name`); a matching related column in the view; otherwise the property read off the lookup or record value itself (`resource.name`, `resource.id`) — including text holding a JSON object, such as a CSV column `{"id":"E1001","name":"Aroha Patel"}` in the test harness — falling back to its display value. To show another related column in a model-driven app, add it to the view. |
-| `progressField`                                                   | Text          | Column holding progress, clamped to 0–100.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `parentField`                                                     | Text          | Parent reference, matched against the record id and then the task title.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `rowField`                                                        | Text          | Optional. With `groupRows` on, records sharing a value are drawn as separate bars on one row labelled with that value — e.g. every roster swing for an employee, with gaps for days off. The row nests under the first parent its records name.                                                                                                                                                                                                                                                                                                                         |
-| `rowTitleField`                                                   | Text          | Optional. Labels a grouped row, so rows can be grouped by one value and shown by another — e.g. `rowField` `employee.id` with `rowTitleField` `employee.name`, so two people sharing a name stay on separate rows. Falls back to the `rowField` value.                                                                                                                                                                                                                                                                                                                  |
-| `categoryField`                                                   | Text          | Optional grouping label shown in the tooltip.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `colorField`                                                      | Text          | Optional. The value each bar is coloured by when `colorMode` is `field`. Falls back to `categoryField`, so colouring by category needs no second setting.                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `colorMode`                                                       | Enum          | `status` (default) for the built-in time-based scheme, or `field` to colour by the colour field's value.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `colorLegend`                                                     | Text          | Your own colours and legend labels. See [Colours and the legend](#colours-and-the-legend).                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `density`                                                         | Enum          | Initial density: `comfortable` (Detailed) or `compact`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `timeScale`                                                       | Enum          | Initial zoom: `day`, `week` or `month`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `showToolbar` / `showCurrentTime` / `showProgress` / `showLegend` | Boolean       | Feature toggles.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `groupRows`                                                       | Boolean       | Merges records sharing a `rowField` value onto one row (default on). Off gives every record its own row.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `allowMove` / `allowResize`                                       | Boolean       | Turn the editing gestures on. Both default to off, so an existing app does not become editable by upgrading. See [Editing](#editing).                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `lockedField`                                                     | Text          | Optional. A column marking records that may not be rescheduled, whichever gestures are on. See [Locking individual tasks](#locking-individual-tasks).                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `selectedTaskId`                                                  | Text (output) | Outputs the selected task; selection is also pushed to the host.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `lastEdit`                                                        | Text (output) | The last move or resize as JSON, for your app to save. See [Editing](#editing).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Property                 | Type          | Purpose                                                                                                    |
+| ------------------------ | ------------- | ---------------------------------------------------------------------------------------------------------- |
+| `tasks`                  | Dataset       | The task records.                                                                                          |
+| `start` / `end`          | Text          | Optional timeline boundary, as a date such as `2026-01-01`. Blank uses the earliest and latest task dates. |
+| `fields` (Field mapping) | Text (JSON)   | Which columns the chart reads. See [Field mapping](#field-mapping).                                        |
+| `options` (Options)      | Text (JSON)   | How the chart looks and what a user may do. See [Options](#options).                                       |
+| `selectedTaskId`         | Text (output) | The selected task; selection is also pushed to the host.                                                   |
+| `selectedRowId`          | Text (output) | The selected row: the group value for a group heading, the row id for a merged row, else the task id.      |
+| `lastEdit`               | Text (output) | The last move or resize as JSON, for your app to save. See [Editing](#editing).                            |
+
+A newly added control starts with both settings filled in with every key at its default, as a template to
+edit. Both are optional all the same, and so is every entry in them: leave one out, or clear the setting,
+and its default applies. A
+setting the control cannot use — broken JSON, a misspelt key, a value it does not know — is named in a
+warning bar above the chart, and the default applies in its place.
+
+In a canvas app, build the text with `JSON()` rather than typing escaped quotes:
+
+```
+JSON({ task: "name", start: "startDate", end: "endDate", group: "crew",
+       row: { id: "employee.id", label: "employee.name" } })
+```
+
+In a model-driven app, type the JSON straight into the property.
+
+#### Field mapping
+
+| Key        | Default     | Reads                                                                                                                                                                                |
+| ---------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `task`     | `title`     | The task label. `{ "id": "code", "label": "name" }` also names the column that identifies a task, which `selectedTaskId` and `lastEdit` then carry; without one, the record id does. |
+| `start`    | `startDate` | The start date. Records without both dates are skipped.                                                                                                                              |
+| `end`      | `endDate`   | The end date.                                                                                                                                                                        |
+| `progress` | `progress`  | Progress, clamped to 0–100.                                                                                                                                                          |
+| `parent`   | `parentId`  | A parent reference, matched against the task id and then the task title.                                                                                                             |
+| `group`    | —           | A heading row per value, with every top-level row under it. A task with a parent stays under its parent. Records with no value go under **(No value)**, last.                        |
+| `row`      | —           | Records sharing a value are drawn as separate bars on one row — e.g. every roster swing for an employee. The row nests under the first parent its records name.                      |
+| `category` | —           | A label shown in the tooltip.                                                                                                                                                        |
+| `color`    | —           | The value each bar is coloured by when `options.colorBy` is `field`. Falls back to `category`.                                                                                       |
+| `locked`   | —           | A column marking records that may not be rescheduled. See [Locking individual tasks](#locking-individual-tasks).                                                                     |
+
+`task`, `group` and `row` take either a column name, or `{ "id": ..., "label": ... }` to key by one column
+and show another — e.g. `"row": { "id": "employee.id", "label": "employee.name" }`, so two people sharing a
+name stay on separate rows. A plain name for `group` or `row` does both jobs.
+
+Every column name accepts `lookup.column`, e.g. `resource.name`, to read a column from the table a lookup
+points at. It is resolved in order: a column literally named that (e.g. a flattened `resource.name`); a
+matching related column in the view; otherwise the property read off the lookup or record value itself
+(`resource.name`, `resource.id`) — including text holding a JSON object, such as a CSV column
+`{"id":"E1001","name":"Aroha Patel"}` in the test harness — falling back to its display value. Only one level
+is read, so flatten deeper paths in the app first. To show another related column in a model-driven app, add
+it to the view.
+
+A mapping you set that matches no column is named in a warning bar, along with the columns the dataset does
+have.
+
+#### Options
+
+| Key               | Default       | Does                                                                                          |
+| ----------------- | ------------- | --------------------------------------------------------------------------------------------- |
+| `density`         | `comfortable` | Initial density: `comfortable` (Detailed) or `compact`.                                       |
+| `timeScale`       | `day`         | Initial zoom: `day`, `week` or `month`.                                                       |
+| `colorBy`         | `status`      | `status` for the built-in time-based scheme, or `field` to colour by `fields.color`.          |
+| `legend`          | —             | Your own colours and legend labels. See [Colours and the legend](#colours-and-the-legend).    |
+| `showToolbar`     | `true`        | The toolbar with search, filter chips, zoom and density.                                      |
+| `showCurrentTime` | `true`        | The marker for the current time.                                                              |
+| `showProgress`    | `true`        | Progress fills on bars and the progress column.                                               |
+| `showLegend`      | `true`        | The legend along the bottom.                                                                  |
+| `groupRows`       | `true`        | Merges records sharing a `fields.row` value onto one row. Off gives every record its own row. |
+| `allowMove`       | `false`       | Lets a user drag a bar along the timeline. See [Editing](#editing).                           |
+| `allowResize`     | `false`       | Lets a user drag either end of a bar.                                                         |
+| `showSettings`    | `false`       | Shows the settings button. For makers only — see [The settings panel](#the-settings-panel).   |
+
+Density and time scale are only where the chart starts: the toolbar changes them after that.
+
+#### The settings panel
+
+Rather than writing the JSON by hand, set `"showSettings": true` in Options while you build the app. A
+settings button then appears at the end of the toolbar (or in the status bar when the toolbar is hidden) and
+opens a panel with every field and option:
+
+- Column pickers list the dataset's own columns, and take a typed `lookup.column` too. A name that matches no
+  column is flagged as you type.
+- Every change is drawn on the chart straight away, from the data it already has, and a banner says the chart
+  is previewing unsaved settings.
+- A control cannot save its own properties, so the panel writes both settings out at the bottom — as JSON for
+  a model-driven app, or as a `JSON({...})` formula for a canvas app — with a button to copy each one. Paste
+  them into Field mapping and Options; once a property holds the new value, the preview of it ends by itself.
+  **Discard** on the banner drops the preview instead.
+- **Apply** skips the pasting in a canvas app. It publishes both settings through the `draftFields` and
+  `draftOptions` outputs and fires `OnChange`; the app stores them and reads the properties back from the store.
+
+**Saving with Apply in a canvas app.** A property cannot read the control's own output — that is a circular
+reference — so the settings go through a table, which also keeps them across sessions. With a `GanttSettings`
+table holding `Name`, `Fields` and `Options` text columns:
+
+```
+// OnChange of the control. OnChange also fires for selections and edits, so only save a change.
+With(
+    { saved: LookUp(GanttSettings, Name = "Roster") },
+    If(
+        !IsBlank(Self.draftFields) &&
+            (Self.draftFields <> saved.Fields || Self.draftOptions <> saved.Options),
+        Patch(GanttSettings, saved, { Fields: Self.draftFields, Options: Self.draftOptions })
+    )
+)
+
+// Field mapping
+LookUp(GanttSettings, Name = "Roster").Fields
+
+// Options
+LookUp(GanttSettings, Name = "Roster").Options
+```
+
+Once the properties pick up the stored values, the preview ends by itself: the chart is showing the saved
+settings. The settings can then change without republishing the app. A model-driven form cannot take its
+properties from data, so there the panel's Copy buttons remain the way to save.
+
+Turn `showSettings` off again before the app goes to users: the canvas runtime gives a control no reliable way
+to tell the studio from a published app, so the button is shown wherever the option is on.
 
 ### Colours and the legend
 
-Out of the box, bars are coloured by the built-in time-based status and the legend names those five states. Neither is fixed: `colorMode` decides what the colour means, and `colorLegend` decides which colours and labels are used.
+Out of the box, bars are coloured by the built-in time-based status and the legend names those five states. Neither is fixed: `options.colorBy` decides what the colour means, and `options.legend` decides which colours and labels are used.
 
-**Colour by a field.** Set `colorMode` to `field` and point `colorField` at the column whose value should pick the colour — a shift type, a discipline, a workflow state. With no `colorLegend`, the control hands out its own palette as values appear and builds the legend from them, so `colorMode` alone is enough to get started. `colorField` falls back to `categoryField`, so a chart already grouped by category needs nothing else. Values past the twentieth share the catch-all swatch, which keeps the legend readable when the column has high cardinality.
+**Colour by a field.** Set `options.colorBy` to `field` and point `fields.color` at the column whose value should pick the colour — a shift type, a discipline, a workflow state. With no `options.legend`, the control hands out its own palette as values appear and builds the legend from them, so `colorBy` alone is enough to get started. `fields.color` falls back to `fields.category`, so a chart already grouped by category needs nothing else. Values past the twentieth share the catch-all swatch, which keeps the legend readable when the column has high cardinality.
 
-**Name the colours yourself.** `colorLegend` takes either JSON or a shorthand — whichever is easier to write in the host:
+**Name the colours yourself.** `options.legend` takes either a shorthand string or JSON written straight into the options — whichever is easier to write in the host:
 
 ```
 Day shift = #0F6CBD; Night shift = #5C2E91; Leave = #C19C00; * = #8A8886
@@ -88,18 +186,20 @@ Day shift = #0F6CBD; Night shift = #5C2E91; Leave = #C19C00; * = #8A8886
 - Colours may be hex, `rgb()`, `hsl()` or a CSS colour keyword. An entry whose colour the browser would not take is dropped on its own, so one typo costs one swatch rather than the whole legend.
 - A bar's progress fill is the colour itself, on a faint wash of it; hex and `rgb()` are the colours that wash cleanly.
 
-**Recolour the built-in statuses.** With `colorMode` left at `status`, entries naming a status — `On track`, `At risk`, `Overdue`, `Complete`, `Not started` — recolour and rename it, and anything else in the legend is ignored:
+**Recolour the built-in statuses.** With `options.colorBy` left at `status`, entries naming a status — `On track`, `At risk`, `Overdue`, `Complete`, `Not started` — recolour and rename it, and anything else in the legend is ignored:
 
 ```
 Overdue = #B10E1C; At risk = #F7630C; Complete = #0F7B0F
 ```
 
-Set `showLegend` off to keep the colours but drop the legend from the status bar.
+Set `options.showLegend` off to keep the colours but drop the legend from the status bar.
+
+Clicking a swatch filters the chart to bars of that colour; each colour picked shows as a chip in the toolbar, where it can be removed.
 
 ### Editing
 
-Two gestures can be turned on, each on its own: `allowMove` drags a whole bar along the
-timeline, and `allowResize` drags either end of it. Both default to **off**, so nothing about an
+Two gestures can be turned on, each on its own: `options.allowMove` drags a whole bar along the
+timeline, and `options.allowResize` drags either end of it. Both default to **off**, so nothing about an
 existing chart changes until you ask for it. Creating and deleting records are left to the app.
 
 **The control never writes to your data.** It publishes what the user did and your app saves
@@ -184,7 +284,7 @@ refusing the edit, rather than quietly losing it.
 
 #### Locking individual tasks
 
-The two `allow*` settings decide what a user may do to the chart. `lockedField` decides which
+The two `allow*` options decide what a user may do to the chart. `fields.locked` decides which
 records are exempt: point it at a column, and any record whose value reads as "yes" cannot be
 moved or resized — no drag grips and no grab cursor. Everything else on the chart stays
 editable.

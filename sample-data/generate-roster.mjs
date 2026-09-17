@@ -8,14 +8,17 @@
 //
 //   Crew (root)  ->  one row per employee, holding every swing / leave / induction
 //
-// Set the control's Row field to "employee.id" and Row title field to
-// "employee.name": records sharing an id are drawn as separate bars on a single
-// row labelled with the name, with gaps for days off. Title field
-// "employee.name" labels every bar with the employee.
+// Set the control's Field mapping to
+//   {"row":{"id":"employee.id","label":"employee.name"}}
+// so records sharing an id are drawn as separate bars on a single row labelled
+// with the name, with gaps for days off. A task of "employee.name" labels every
+// bar with the employee.
 //
 // Crew rows carry dates too, because the control skips records without both
 // endpoints. parentId references the crew's title, which the control resolves
-// when it doesn't match a record id (as in the test harness).
+// when it doesn't match a record id (as in the test harness). Every record also
+// carries crew, so "group": "crew" gathers the same rows under crew headings
+// without needing the crew records at all.
 //
 // A handful of employees also pick up timed site tasks: several activities on
 // one day of a swing, written with real hours rather than midnight. On the day

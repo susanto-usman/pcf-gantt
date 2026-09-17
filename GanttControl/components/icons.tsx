@@ -107,3 +107,11 @@ export const DensityIcon: React.FC<IconProps> = (props) => (
         <path d="M3.25 5.25h13.5M3.25 10h13.5M3.25 14.75h13.5" />
     </Icon>
 );
+
+export const SettingsIcon: React.FC<IconProps> = (props) => (
+    <Icon {...props}>
+        <path d="M3.25 6h7.5M14.25 6h2.5M3.25 14h2.5M9.25 14h7.5" />
+        <circle cx="12.5" cy="6" r="1.75" />
+        <circle cx="7.5" cy="14" r="1.75" />
+    </Icon>
+);
