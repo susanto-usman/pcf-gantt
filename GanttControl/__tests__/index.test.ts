@@ -596,3 +596,27 @@ describe("GanttControl", () => {
         expect(props.isLoading).toBe(true);
     });
 });
+
+describe("timeline boundaries", () => {
+    const row = { id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-01" };
+
+    it("reads a date typed as text, on its own local day", () => {
+        const { props } = render({ rows: [row], settings: { start: "2024-01-04", end: "2024-01-10" } });
+
+        expect(props.start).toBe(d(2024, 1, 4).getTime());
+        expect(props.end).toBe(d(2024, 1, 10).getTime());
+    });
+
+    it("trims the value and drops any time of day", () => {
+        const { props } = render({ rows: [row], settings: { start: " 2024-01-04T15:45:00 " } });
+
+        expect(props.start).toBe(d(2024, 1, 4).getTime());
+    });
+
+    it("leaves the boundary open when blank or unparsable", () => {
+        const { props } = render({ rows: [row], settings: { start: "", end: "not a date" } });
+
+        expect(props.start).toBeUndefined();
+        expect(props.end).toBeUndefined();
+    });
+});

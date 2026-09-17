@@ -575,21 +575,36 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
     }
 
     private readDate(record: DatasetRecord, field: FieldRef): Date | null {
-        const value = this.readValue(record, field);
+        return this.parseDate(this.readValue(record, field));
+    }
 
-        if (value === null || value === undefined || value === "") {
+    /**
+     * A date read from a host value, which reaches us as a Date from a Dataverse
+     * column or as text from a maker-typed property. Null when blank or unparsable.
+     */
+    private parseDate(value: unknown): Date | null {
+        if (value === null || value === undefined) {
+            return null;
+        }
+
+        // Makers type the boundary properties by hand, so a stray space is worth
+        // tolerating: only the date-only branch used to trim, which left a padded
+        // "2024-01-01T09:00" unparsable.
+        const text = typeof value === "string" ? value.trim() : value;
+
+        if (text === "") {
             return null;
         }
 
         // A date-only string ("2024-01-01") parses as UTC midnight, which is the
         // previous local day west of UTC, so read it as a local date instead.
-        const dateOnly = typeof value === "string" ? DATE_ONLY.exec(value.trim()) : null;
+        const dateOnly = typeof text === "string" ? DATE_ONLY.exec(text) : null;
         const date =
-            value instanceof Date
-                ? new Date(value)
+            text instanceof Date
+                ? new Date(text)
                 : dateOnly
                   ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
-                  : new Date(value as string | number);
+                  : new Date(text as string | number);
 
         if (Number.isNaN(date.getTime())) {
             return null;
@@ -612,15 +627,9 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
      * property is blank. A number rather than a Date so an unchanged value
      * compares equal across updateView calls and memoised work is kept.
      */
-    private readBoundary(property: ComponentFramework.PropertyTypes.DateTimeProperty | undefined): number | undefined {
-        const raw = property?.raw;
-
-        if (!raw) {
-            return undefined;
-        }
-
-        const date = new Date(raw);
-        return Number.isNaN(date.getTime()) ? undefined : startOfDay(date).getTime();
+    private readBoundary(property: ComponentFramework.PropertyTypes.StringProperty | undefined): number | undefined {
+        const date = this.parseDate(property?.raw);
+        return date === null ? undefined : startOfDay(date).getTime();
     }
 
     private readNumber(record: DatasetRecord, field: FieldRef, fallback: number): number {
