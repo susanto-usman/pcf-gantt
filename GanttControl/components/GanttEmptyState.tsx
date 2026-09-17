@@ -8,12 +8,14 @@ export type EmptyReason =
     | "noData"
     /** Records arrived, but none of them had a usable start and finish date. */
     | "noValidDates"
-    /** Records exist, but the current search excluded them. */
+    /** Records exist, but the current search or legend filter excluded them. */
     | "noMatches";
 
 export interface GanttEmptyStateProps {
     reason: EmptyReason;
     search?: string;
+    /** True when a legend filter is narrowing the chart, alongside or instead of the search. */
+    isLegendFiltered?: boolean;
     recordCount?: number;
     availableColumns?: string[];
     dateFieldNames?: { start: string; end: string };
@@ -22,6 +24,7 @@ export interface GanttEmptyStateProps {
 export const GanttEmptyState: React.FC<GanttEmptyStateProps> = ({
     reason,
     search,
+    isLegendFiltered,
     recordCount,
     availableColumns,
     dateFieldNames,
@@ -38,14 +41,22 @@ export const GanttEmptyState: React.FC<GanttEmptyStateProps> = ({
             icon: <WarningIcon />,
             title: `${recordCount ?? 0} record${recordCount === 1 ? "" : "s"} loaded, but none can be placed`,
             detail: dateFieldNames
-                ? `No record has a usable value in both "${dateFieldNames.start}" and "${dateFieldNames.end}". Point the Start field and End field properties at date columns in this view.`
+                ? `No record has a usable value in both "${dateFieldNames.start}" and "${dateFieldNames.end}". Point start and end in the Field mapping at date columns in this view.`
                 : "No record has both a start and a finish date.",
         },
-        noMatches: {
-            icon: <SearchIcon />,
-            title: `No tasks match "${search ?? ""}"`,
-            detail: "Try a different search term.",
-        },
+        noMatches: isLegendFiltered
+            ? {
+                  icon: <SearchIcon />,
+                  title: search?.trim() ? `No tasks match "${search}" in this filter` : "No tasks match this filter",
+                  detail: search?.trim()
+                      ? "Try a different search term, or pick other colours in the legend."
+                      : "Pick other colours in the legend, or clear the filter.",
+              }
+            : {
+                  icon: <SearchIcon />,
+                  title: `No tasks match "${search ?? ""}"`,
+                  detail: "Try a different search term.",
+              },
     }[reason];
 
     return (

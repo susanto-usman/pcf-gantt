@@ -1,17 +1,10 @@
-import {
-    mergeClasses,
-    PositioningImperativeRef,
-    PositioningVirtualElement,
-    ProgressBar,
-    Text,
-    tokens,
-    Tooltip,
-} from "@fluentui/react-components";
+import { mergeClasses, Tooltip } from "@fluentui/react-components";
 import * as React from "react";
 import { BarPalette } from "../colors";
 import { cssVars, useGanttStyles } from "../styles";
 import { DragMode, EditPermissions, GanttTask, TaskEdit } from "../types";
-import { applyDrag, clampDragDays, diffInDays, exclusiveEnd, formatDateTime, hasTimeOfDay } from "../utils";
+import { applyDrag, clampDragDays, formatDateTime } from "../utils";
+import { GanttBarTooltipContent, useCursorTooltip } from "./GanttBarTooltip";
 
 /** Below this a bar has no room for two grips without covering itself. */
 const MIN_RESIZE_WIDTH = 26;
@@ -199,48 +192,9 @@ export const GanttBar: React.FC<GanttBarProps> = ({
     const shownLeft = drag && drag.mode !== "end" ? left + shift : left;
     const shownWidth = !drag || drag.mode === "move" ? width : drag.mode === "start" ? width - shift : width + shift;
 
-    /**
-     * Bars can span the whole timeline — a summary bar is often thousands of
-     * pixels wide — so anchoring the tooltip to the element puts it nowhere
-     * near the cursor. Point it at a zero-size virtual element that tracks the
-     * pointer instead.
-     *
-     * The element is stable and reads from a ref, so following the pointer
-     * costs a positioning update rather than a React render per mouse move.
-     */
-    const pointer = React.useRef({ x: 0, y: 0 });
-    const positioningRef = React.useRef<PositioningImperativeRef>(null);
-    const frame = React.useRef(0);
+    const cursorTooltip = useCursorTooltip();
 
-    const virtualTarget = React.useMemo<PositioningVirtualElement>(
-        () => ({
-            getBoundingClientRect: () => {
-                const { x, y } = pointer.current;
-                return { x, y, top: y, bottom: y, left: x, right: x, width: 0, height: 0 };
-            },
-        }),
-        []
-    );
-
-    React.useEffect(
-        () => () => {
-            cancelAnimationFrame(frame.current);
-            detachDrag.current?.();
-        },
-        []
-    );
-
-    const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-        pointer.current = { x: event.clientX, y: event.clientY };
-
-        // Coalesce to one reposition per frame; pointermove can fire far faster.
-        if (frame.current === 0) {
-            frame.current = requestAnimationFrame(() => {
-                frame.current = 0;
-                positioningRef.current?.updatePosition();
-            });
-        }
-    };
+    React.useEffect(() => () => detachDrag.current?.(), []);
 
     const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
         if (event.key === "Enter") {
@@ -251,59 +205,6 @@ export const GanttBar: React.FC<GanttBarProps> = ({
             onSelect(task.id);
         }
     };
-
-    const tooltip = (
-        <div className={styles.tooltipContent}>
-            <Text className={styles.tooltipTitle}>{task.title}</Text>
-            {rowLabel && (
-                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                    {rowLabel}
-                </Text>
-            )}
-            <div className={styles.tooltipRow}>
-                <span className={styles.tooltipLabel}>Start</span>
-                <span>{formatDateTime(shownStart)}</span>
-            </div>
-            <div className={styles.tooltipRow}>
-                <span className={styles.tooltipLabel}>Finish</span>
-                <span>{formatDateTime(shownEnd)}</span>
-            </div>
-            <div className={styles.tooltipRow}>
-                <span className={styles.tooltipLabel}>Duration</span>
-                <span>{formatDuration(shownStart, shownEnd)}</span>
-            </div>
-            {label && (
-                <div className={styles.tooltipRow}>
-                    <span className={styles.tooltipLabel}>{caption}</span>
-                    <span style={{ color: palette.text }}>{label}</span>
-                </div>
-            )}
-            {task.category && (
-                <div className={styles.tooltipRow}>
-                    <span className={styles.tooltipLabel}>Category</span>
-                    <span>{task.category}</span>
-                </div>
-            )}
-            {showLock && (
-                <div className={styles.tooltipRow}>
-                    <span className={styles.tooltipLabel}>Locked</span>
-                    <span>This task cannot be rescheduled</span>
-                </div>
-            )}
-            {showProgress && (
-                <>
-                    <div className={styles.tooltipRow}>
-                        <ProgressBar value={progress / 100} thickness="large" />
-                    </div>
-
-                    <div className={styles.tooltipRow}>
-                        <span className={styles.tooltipLabel}>{isSummary ? "Rolled-up progress" : "Progress"}</span>
-                        <span>{`${progress}%`}</span>
-                    </div>
-                </>
-            )}
-        </div>
-    );
 
     const spokenRange = `${formatDateTime(shownStart)} to ${formatDateTime(shownEnd)}`;
 
@@ -329,21 +230,25 @@ export const GanttBar: React.FC<GanttBarProps> = ({
             onOpen(task.id);
         },
         onKeyDown: handleKeyDown,
-        onPointerMove: handlePointerMove,
+        onPointerMove: cursorTooltip.onPointerMove,
     };
 
-    // Sits just clear of the cursor so the surface never lands under it.
     const tooltipProps = {
-        content: tooltip,
+        content: (
+            <GanttBarTooltipContent
+                task={task}
+                rowLabel={rowLabel}
+                start={shownStart}
+                end={shownEnd}
+                progress={progress}
+                showProgress={showProgress}
+                isSummary={isSummary}
+                showLock={showLock}
+            />
+        ),
         relationship: "description" as const,
         withArrow: true,
-        positioning: {
-            target: virtualTarget,
-            positioningRef,
-            position: "above" as const,
-            align: "center" as const,
-            offset: 14,
-        },
+        positioning: cursorTooltip.positioning,
     };
 
     if (isSummary) {
@@ -436,23 +341,3 @@ export const GanttBar: React.FC<GanttBarProps> = ({
         </Tooltip>
     );
 };
-
-/** Whole days for a date-only task, elapsed time once either end carries one. */
-function formatDuration(start: Date, end: Date): string {
-    if (!hasTimeOfDay(start) && !hasTimeOfDay(end)) {
-        const days = diffInDays(start, end) + 1;
-        return days === 1 ? "1 day" : `${days} days`;
-    }
-
-    const minutes = Math.max(0, Math.round((exclusiveEnd(end).getTime() - start.getTime()) / 60000));
-    const units: [number, string][] = [
-        [Math.floor(minutes / 1440), "day"],
-        [Math.floor((minutes % 1440) / 60), "hr"],
-        [minutes % 60, "min"],
-    ];
-    const spoken = units
-        .filter(([value]) => value > 0)
-        .map(([value, unit]) => `${value} ${unit}${value === 1 ? "" : "s"}`);
-
-    return spoken.length > 0 ? spoken.join(" ") : "0 mins";
-}

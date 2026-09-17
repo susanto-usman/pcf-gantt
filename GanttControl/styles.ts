@@ -1,4 +1,4 @@
-import { makeStyles, tokens, typographyStyles } from "@fluentui/react-components";
+import { makeStyles, shorthands, tokens, typographyStyles } from "@fluentui/react-components";
 
 /**
  * Fixed widths of the trailing columns in the task list, needed by the chart to
@@ -61,15 +61,26 @@ export const useGanttStyles = makeStyles({
         paddingBlock: tokens.spacingVerticalXS,
         borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
         backgroundColor: tokens.colorNeutralBackground1,
+        // Filter chips can outgrow one line; the controls wrap under them rather than being clipped.
+        flexWrap: "wrap",
+        rowGap: tokens.spacingVerticalXS,
     },
     toolbarGroup: {
         display: "flex",
         alignItems: "center",
+        flexWrap: "wrap",
         columnGap: tokens.spacingHorizontalXXS,
+        rowGap: tokens.spacingVerticalXS,
         minWidth: 0,
     },
     searchBox: {
         maxWidth: "220px",
+    },
+    filterChips: {
+        flexWrap: "wrap",
+        columnGap: tokens.spacingHorizontalXS,
+        rowGap: tokens.spacingVerticalXXS,
+        marginInlineStart: tokens.spacingHorizontalS,
     },
 
     /**
@@ -380,6 +391,7 @@ export const useGanttStyles = makeStyles({
         alignItems: "center",
         overflow: "hidden",
         borderRadius: tokens.borderRadiusMedium,
+        border: "1px solid lightgray",
         cursor: "pointer",
         transitionDuration: tokens.durationFaster,
         transitionTimingFunction: tokens.curveEasyEase,
@@ -531,10 +543,38 @@ export const useGanttStyles = makeStyles({
         columnGap: tokens.spacingHorizontalM,
         flexWrap: "wrap",
     },
+    /** A button, so reset to look like the plain label it replaced. */
     legendItem: {
         display: "inline-flex",
         alignItems: "center",
         columnGap: tokens.spacingHorizontalXS,
+        paddingInline: tokens.spacingHorizontalXS,
+        paddingBlock: "1px",
+        border: `${tokens.strokeWidthThin} solid transparent`,
+        borderRadius: tokens.borderRadiusMedium,
+        backgroundColor: "transparent",
+        color: "inherit",
+        fontFamily: "inherit",
+        fontSize: "inherit",
+        lineHeight: "inherit",
+        cursor: "pointer",
+        ":hover": {
+            backgroundColor: tokens.colorSubtleBackgroundHover,
+            color: tokens.colorNeutralForeground2,
+        },
+        ":focus-visible": {
+            outline: `${tokens.strokeWidthThick} solid ${tokens.colorStrokeFocus2}`,
+            outlineOffset: "1px",
+        },
+    },
+    legendItemActive: {
+        ...shorthands.borderColor(tokens.colorNeutralStroke1),
+        backgroundColor: tokens.colorSubtleBackgroundSelected,
+        color: tokens.colorNeutralForeground1,
+    },
+    /** Swatches left out of an active filter. */
+    legendItemMuted: {
+        opacity: 0.5,
     },
     legendSwatch: {
         width: "10px",

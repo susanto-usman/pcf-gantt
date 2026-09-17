@@ -21,6 +21,7 @@ import {
     collectParentIds,
     dateToOffset,
     getTaskExtent,
+    getTaskStatus,
     instantToOffset,
     isSameDay,
     ROW_HEIGHT,
@@ -31,7 +32,7 @@ import {
 } from "../utils";
 import { EmptyReason, GanttEmptyState } from "./GanttEmptyState";
 import { GanttTaskRow } from "./GanttTaskRow";
-import { GanttToolbar } from "./GanttToolbar";
+import { FilterChip, GanttToolbar } from "./GanttToolbar";
 import { DismissIcon } from "./icons";
 
 /**
@@ -56,6 +57,10 @@ const MAX_BOUNDARY_SPAN_MS = 3653 * 86400000;
 
 const MS_PER_HOUR = 3600000;
 
+/** Chip keys: the search has one chip, and each legend item in the filter has its own. */
+const SEARCH_CHIP = "search";
+const LEGEND_CHIP = "legend:";
+
 /** Follows value, but only once it has stopped changing for delayMs. */
 function useDebouncedValue<T>(value: T, delayMs: number): T {
     const [debounced, setDebounced] = React.useState(value);
@@ -73,6 +78,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     recordCount,
     availableColumns,
     unmatchedFields,
+    settingProblems,
     dateFieldNames,
     selectedTaskId,
     selectedRowId,
@@ -156,6 +162,8 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     // Keyed by the mismatch itself, so fixing one setting and breaking another shows the notice again.
     const unmatchedKey = unmatchedFields.map((item) => `${item.setting}=${item.field}`).join("|");
     const [dismissedKey, setDismissedKey] = React.useState("");
+    const problemsKey = settingProblems.join("|");
+    const [dismissedProblemsKey, setDismissedProblemsKey] = React.useState("");
 
     /** Editing ---------------------------------------------------------- */
     /**
@@ -238,30 +246,63 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         }
     }, [showCurrentTime]);
 
+    // Built from every task rather than the filtered set, so searching or
+    // filtering narrows the chart without rewriting the legend under it.
+    const colors = React.useMemo(
+        () => buildColorScheme(colorMode, colorLegend, tasks),
+        [colorMode, colorLegend, tasks]
+    );
+
+    /**
+     * Legend items the user has clicked; empty shows every bar. Held as keys,
+     * and read through the current legend, so a key the legend no longer has —
+     * the maker switched scheme, or the value left the data — stops filtering
+     * rather than hiding everything with no swatch left to click.
+     */
+    const [legendKeys, setLegendKeys] = React.useState<ReadonlySet<string>>(() => new Set<string>());
+    const legendFilter = React.useMemo<ReadonlySet<string>>(
+        () => new Set(colors.items.filter((item) => legendKeys.has(item.key)).map((item) => item.key)),
+        [colors, legendKeys]
+    );
+
+    const handleToggleLegend = React.useCallback((key: string) => {
+        setLegendKeys((current) => {
+            const next = new Set(current);
+
+            if (next.has(key)) {
+                next.delete(key);
+            } else {
+                next.add(key);
+            }
+
+            return next;
+        });
+    }, []);
+
     const filteredTasks = React.useMemo(() => {
         const term = search.trim().toLowerCase();
 
-        if (!term) {
+        if (!term && legendFilter.size === 0) {
             return liveTasks;
         }
 
         return liveTasks.filter(
             (task) =>
-                task.title.toLowerCase().indexOf(term) >= 0 ||
-                (task.category ?? "").toLowerCase().indexOf(term) >= 0 ||
-                (task.rowKey ?? "").toLowerCase().indexOf(term) >= 0 ||
-                (task.rowTitle ?? "").toLowerCase().indexOf(term) >= 0
+                (!term ||
+                    task.title.toLowerCase().indexOf(term) >= 0 ||
+                    (task.category ?? "").toLowerCase().indexOf(term) >= 0 ||
+                    (task.rowKey ?? "").toLowerCase().indexOf(term) >= 0 ||
+                    (task.rowTitle ?? "").toLowerCase().indexOf(term) >= 0 ||
+                    (task.groupTitle ?? task.groupKey ?? "").toLowerCase().indexOf(term) >= 0) &&
+                // Matched on the record's own dates, the same ones its bar is coloured by.
+                (legendFilter.size === 0 ||
+                    legendFilter.has(
+                        colors.keyFor(task.colorKey ?? "", getTaskStatus(task.start, task.end, task.progress, today))
+                    ))
         );
-    }, [liveTasks, search]);
+    }, [liveTasks, search, legendFilter, colors, today]);
 
     const rows = React.useMemo(() => buildRows(filteredTasks, collapsedIds), [filteredTasks, collapsedIds]);
-
-    // Built from every task rather than the filtered set, so searching narrows
-    // the chart without rewriting the legend under it.
-    const colors = React.useMemo(
-        () => buildColorScheme(colorMode, colorLegend, tasks),
-        [colorMode, colorLegend, tasks]
-    );
 
     // Canvas pushes every keystroke of a bound input through, so wait for the
     // boundary to settle rather than rebuilding the timeline per character.
@@ -568,6 +609,37 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         [styles, timeScale, timeline, listWidth]
     );
 
+    const searchTerm = search.trim();
+    const filterChips = React.useMemo<FilterChip[]>(
+        () => [
+            ...(searchTerm ? [{ key: SEARCH_CHIP, label: `Search: "${searchTerm}"` }] : []),
+            ...colors.items
+                .filter((item) => legendFilter.has(item.key))
+                .map((item) => ({
+                    key: LEGEND_CHIP + item.key,
+                    label: item.label,
+                    color: item.palette.fill,
+                })),
+        ],
+        [searchTerm, colors, legendFilter]
+    );
+
+    const handleRemoveFilter = React.useCallback(
+        (key: string) => {
+            if (key === SEARCH_CHIP) {
+                setSearch("");
+            } else if (key.startsWith(LEGEND_CHIP)) {
+                handleToggleLegend(key.slice(LEGEND_CHIP.length));
+            }
+        },
+        [handleToggleLegend]
+    );
+
+    const handleClearFilters = React.useCallback(() => {
+        setSearch("");
+        setLegendKeys(new Set());
+    }, []);
+
     const toolbar = showToolbar ? (
         <GanttToolbar
             density={density}
@@ -575,6 +647,9 @@ export const GanttChart: React.FC<GanttChartProps> = ({
             search={search}
             canCollapse={parentIds.length > 0}
             allCollapsed={allCollapsed}
+            filters={filterChips}
+            onRemoveFilter={handleRemoveFilter}
+            onClearFilters={handleClearFilters}
             onDensityChange={setDensity}
             onTimeScaleChange={setTimeScale}
             onSearchChange={setSearch}
@@ -583,6 +658,62 @@ export const GanttChart: React.FC<GanttChartProps> = ({
             onFitToWidth={handleFitToWidth}
         />
     ) : null;
+
+    const isLegendFiltered = legendFilter.size > 0;
+
+    const statusBar = (
+        <div className={styles.statusBar}>
+            <div className={styles.legend} role="group" aria-label="Filter by colour">
+                {showLegend && (
+                    <>
+                        {colors.items.map((item) => {
+                            const isActive = legendFilter.has(item.key);
+
+                            return (
+                                <button
+                                    key={item.key}
+                                    type="button"
+                                    aria-pressed={isActive}
+                                    title={isActive ? `Stop filtering by ${item.label}` : `Show only ${item.label}`}
+                                    className={mergeClasses(
+                                        styles.legendItem,
+                                        isActive && styles.legendItemActive,
+                                        isLegendFiltered && !isActive && styles.legendItemMuted
+                                    )}
+                                    onClick={() => handleToggleLegend(item.key)}
+                                >
+                                    <span
+                                        className={styles.legendSwatch}
+                                        style={{ backgroundColor: item.palette.fill }}
+                                        aria-hidden="true"
+                                    />
+                                    {item.label}
+                                </button>
+                            );
+                        })}
+                        {/* With a toolbar, its chips carry the clear action instead. */}
+                        {isLegendFiltered && !showToolbar && (
+                            <Button appearance="transparent" size="small" onClick={() => setLegendKeys(new Set())}>
+                                Clear filter
+                            </Button>
+                        )}
+                    </>
+                )}
+            </div>
+
+            <span style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS }}>
+                {isLoading && <Spinner size="extra-tiny" aria-label="Loading more tasks" />}
+                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                    {`${rows.length} of ${tasks.length} task${tasks.length === 1 ? "" : "s"}`}
+                </Text>
+                {hasNextPage && !isLoading && (
+                    <Button appearance="subtle" size="small" onClick={onLoadMore}>
+                        Load more
+                    </Button>
+                )}
+            </span>
+        </div>
+    );
 
     if (isLoading && tasks.length === 0) {
         return (
@@ -604,10 +735,13 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                 <GanttEmptyState
                     reason={reason}
                     search={search}
+                    isLegendFiltered={isLegendFiltered}
                     recordCount={recordCount}
                     availableColumns={availableColumns}
                     dateFieldNames={dateFieldNames}
                 />
+                {/* Kept when a filter emptied the chart, so the legend that did it can undo it. */}
+                {reason === "noMatches" && statusBar}
             </div>
         );
     }
@@ -616,13 +750,36 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         <div className={styles.root} style={containerStyle}>
             {toolbar}
 
+            {problemsKey && problemsKey !== dismissedProblemsKey && (
+                <MessageBar intent="warning" layout="multiline" style={{ flexShrink: 0 }}>
+                    <MessageBarBody>
+                        <MessageBarTitle>
+                            {settingProblems.length === 1
+                                ? "A setting could not be used"
+                                : "Some settings could not be used"}
+                        </MessageBarTitle>
+                        {settingProblems.join(". ")}. The defaults apply in their place.
+                    </MessageBarBody>
+                    <MessageBarActions
+                        containerAction={
+                            <Button
+                                appearance="transparent"
+                                aria-label="Dismiss"
+                                icon={<DismissIcon />}
+                                onClick={() => setDismissedProblemsKey(problemsKey)}
+                            />
+                        }
+                    />
+                </MessageBar>
+            )}
+
             {unmatchedKey && unmatchedKey !== dismissedKey && (
                 <MessageBar intent="warning" layout="multiline" style={{ flexShrink: 0 }}>
                     <MessageBarBody>
                         <MessageBarTitle>
                             {unmatchedFields.length === 1
-                                ? "A field setting doesn't match any column"
-                                : "Some field settings don't match any column"}
+                                ? "A field mapping doesn't match any column"
+                                : "Some field mappings don't match any column"}
                         </MessageBarTitle>
                         {unmatchedFields.map((item) => `${item.setting} "${item.field}"`).join(", ")}. Columns received:{" "}
                         {availableColumns.join(", ")}. In a canvas app, add the column under Fields, or for a related
@@ -762,33 +919,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                 </div>
             </div>
 
-            <div className={styles.statusBar}>
-                <div className={styles.legend}>
-                    {showLegend &&
-                        colors.items.map((item) => (
-                            <span key={item.key} className={styles.legendItem}>
-                                <span
-                                    className={styles.legendSwatch}
-                                    style={{ backgroundColor: item.palette.fill }}
-                                    aria-hidden="true"
-                                />
-                                {item.label}
-                            </span>
-                        ))}
-                </div>
-
-                <span style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS }}>
-                    {isLoading && <Spinner size="extra-tiny" aria-label="Loading more tasks" />}
-                    <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                        {`${rows.length} of ${tasks.length} task${tasks.length === 1 ? "" : "s"}`}
-                    </Text>
-                    {hasNextPage && !isLoading && (
-                        <Button appearance="subtle" size="small" onClick={onLoadMore}>
-                            Load more
-                        </Button>
-                    )}
-                </span>
-            </div>
+            {statusBar}
         </div>
     );
 };

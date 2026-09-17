@@ -95,6 +95,7 @@ describe("buildColorScheme, by status", () => {
         // The colour key is beside the point here; the status decides.
         expect(scheme.paletteFor("Planned", "overdue")).toEqual(STATUS_TOKENS.overdue);
         expect(scheme.labelFor("Planned", "overdue")).toBe(STATUS_LABELS.overdue);
+        expect(scheme.keyFor("Planned", "overdue")).toBe("overdue");
     });
 
     it("lets a legend recolour and rename a status, however it is spelled", () => {
@@ -133,6 +134,10 @@ describe("buildColorScheme, by field", () => {
         // An unmatched value still names itself, which says more than "Other".
         expect(scheme.labelFor("Leave", "onTrack")).toBe("Leave");
         expect(scheme.labelFor(null, "onTrack")).toBe("Other");
+        // Both land on the catch-all's swatch, so a legend filter treats them alike.
+        expect(scheme.keyFor("Planned", "onTrack")).toBe("planned");
+        expect(scheme.keyFor("Leave", "onTrack")).toBe("");
+        expect(scheme.keyFor(null, "onTrack")).toBe("");
     });
 
     it("uses the maker's own catch-all, and leaves it in the legend even when nothing needs it", () => {

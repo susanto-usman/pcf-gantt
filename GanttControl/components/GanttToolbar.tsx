@@ -5,6 +5,8 @@ import {
     MenuList,
     MenuPopover,
     MenuTrigger,
+    Tag,
+    TagGroup,
     Toolbar,
     ToolbarButton,
     ToolbarDivider,
@@ -28,12 +30,23 @@ const SCALE_LABELS: Record<TimeScale, string> = { day: "Day", week: "Week", mont
 const SCALE_ORDER: TimeScale[] = ["day", "week", "month"];
 const DENSITY_LABELS: Record<Density, string> = { comfortable: "Detailed", compact: "Compact" };
 
+/** One filter in use, shown as a removable chip. */
+export interface FilterChip {
+    key: string;
+    label: string;
+    /** A swatch drawn before the label, for a filter picked from the legend. */
+    color?: string;
+}
+
 export interface GanttToolbarProps {
     density: Density;
     timeScale: TimeScale;
     search: string;
     canCollapse: boolean;
     allCollapsed: boolean;
+    filters: FilterChip[];
+    onRemoveFilter: (key: string) => void;
+    onClearFilters: () => void;
     onDensityChange: (density: Density) => void;
     onTimeScaleChange: (scale: TimeScale) => void;
     onSearchChange: (value: string) => void;
@@ -48,6 +61,9 @@ export const GanttToolbar: React.FC<GanttToolbarProps> = ({
     search,
     canCollapse,
     allCollapsed,
+    filters,
+    onRemoveFilter,
+    onClearFilters,
     onDensityChange,
     onTimeScaleChange,
     onSearchChange,
@@ -88,6 +104,44 @@ export const GanttToolbar: React.FC<GanttToolbarProps> = ({
                             onClick={onToggleAll}
                         />
                     </Tooltip>
+                )}
+
+                {filters.length > 0 && (
+                    <>
+                        <TagGroup
+                            className={styles.filterChips}
+                            size={density === "compact" ? "extra-small" : "small"}
+                            aria-label="Filters in use"
+                            onDismiss={(_, data) => onRemoveFilter(String(data.value))}
+                        >
+                            {filters.map((filter) => (
+                                <Tag
+                                    key={filter.key}
+                                    value={filter.key}
+                                    shape="circular"
+                                    appearance="outline"
+                                    dismissible
+                                    dismissIcon={{ "aria-label": "remove" }}
+                                    style={{ paddingLeft: "4px" }}
+                                    media={
+                                        filter.color ? (
+                                            <span
+                                                className={styles.legendSwatch}
+                                                style={{ backgroundColor: filter.color }}
+                                                aria-hidden="true"
+                                            />
+                                        ) : undefined
+                                    }
+                                >
+                                    {filter.label}
+                                </Tag>
+                            ))}
+                        </TagGroup>
+
+                        <ToolbarButton appearance="subtle" onClick={onClearFilters}>
+                            Clear all
+                        </ToolbarButton>
+                    </>
                 )}
             </div>
 

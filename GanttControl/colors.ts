@@ -28,6 +28,8 @@ export interface ColorScheme {
     items: LegendItem[];
     paletteFor(colorKey: string | null, status: TaskStatus): BarPalette;
     labelFor(colorKey: string | null, status: TaskStatus): string;
+    /** The key of the legend item a bar is painted with, which is what filtering by the legend matches on. */
+    keyFor(colorKey: string | null, status: TaskStatus): string;
 }
 
 /**
@@ -346,6 +348,7 @@ function statusScheme(authored: LegendItem[]): ColorScheme {
         items,
         paletteFor: (_colorKey, status) => itemFor(status)?.palette ?? STATUS_TOKENS[status],
         labelFor: (_colorKey, status) => itemFor(status)?.label ?? STATUS_LABELS[status],
+        keyFor: (_colorKey, status) => status,
     };
 }
 
@@ -423,5 +426,7 @@ function fieldScheme(authored: LegendItem[], tasks: readonly { colorKey?: string
             // An unmatched value still says more about the bar than "Other" does.
             return (colorKey ?? "").trim() || (fallback?.label ?? "");
         },
+        // Anything unmatched is painted by the catch-all, whose key is empty.
+        keyFor: (colorKey) => itemFor(colorKey)?.key ?? "",
     };
 }
