@@ -31,6 +31,7 @@ export const cssVars = {
     columnWidth: "--gantt-column-width",
     listWidth: "--gantt-list-width",
     timelineWidth: "--gantt-timeline-width",
+    headerHeight: "--gantt-header-height",
 } as const;
 
 export const useGanttStyles = makeStyles({
@@ -223,6 +224,94 @@ export const useGanttStyles = makeStyles({
         textOverflow: "ellipsis",
     },
 
+    /** A dataset column in the task list. */
+    listCellColumn: {
+        flexShrink: 0,
+        ...typographyStyles.caption1,
+        color: tokens.colorNeutralForeground2,
+    },
+    listCellText: {
+        minWidth: 0,
+        overflow: "hidden",
+        whiteSpace: "nowrap",
+        textOverflow: "ellipsis",
+    },
+    /** The group column: its label is drawn once, over every row of the group in view. */
+    listCellGroup: {
+        position: "relative",
+        flexShrink: 0,
+        backgroundColor: tokens.colorNeutralBackground2,
+        borderBottomColor: "transparent",
+        borderRight: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
+    },
+    listCellGroupEnd: {
+        borderBottomColor: tokens.colorNeutralStroke1,
+    },
+    groupSpan: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        rowGap: tokens.spacingVerticalXS,
+        boxSizing: "border-box",
+        paddingInline: tokens.spacingHorizontalS,
+        textAlign: "center",
+        overflow: "hidden",
+        backgroundColor: tokens.colorNeutralBackground2,
+        ...typographyStyles.caption1Strong,
+        color: tokens.colorNeutralForeground1,
+    },
+    /** A title with a second line under it, e.g. a person and their role. */
+    nameStack: {
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        minWidth: 0,
+        flexGrow: 1,
+    },
+    subtitle: {
+        ...typographyStyles.caption2,
+        color: tokens.colorNeutralForeground3,
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+    },
+    rowFlag: {
+        flexShrink: 0,
+        fontSize: "14px",
+        color: tokens.colorPaletteDarkOrangeForeground1,
+    },
+    avatar: {
+        flexShrink: 0,
+        marginInlineEnd: tokens.spacingHorizontalXS,
+    },
+    poolFilter: {
+        display: "inline-flex",
+        overflow: "hidden",
+        borderRadius: tokens.borderRadiusMedium,
+        border: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke1}`,
+    },
+    poolFilterButton: {
+        paddingInline: tokens.spacingHorizontalXS,
+        paddingBlock: "1px",
+        border: "none",
+        backgroundColor: tokens.colorNeutralBackground1,
+        color: tokens.colorNeutralForeground2,
+        cursor: "pointer",
+        ...typographyStyles.caption2Strong,
+        textTransform: "uppercase",
+        ":hover": { backgroundColor: tokens.colorSubtleBackgroundHover },
+    },
+    poolFilterButtonActive: {
+        backgroundColor: tokens.colorNeutralBackground5,
+        color: tokens.colorNeutralForeground1,
+    },
+
     taskName: {
         minWidth: 0,
         flexGrow: 1,
@@ -302,6 +391,43 @@ export const useGanttStyles = makeStyles({
         display: "flex",
         height: "24px",
     },
+    /** Day ticks carry the weekday above the date, so they need the room. */
+    tickRowTall: {
+        height: "34px",
+    },
+    weekRow: {
+        display: "flex",
+        height: "20px",
+    },
+    weekCell: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxSizing: "border-box",
+        flexShrink: 0,
+        height: "100%",
+        overflow: "hidden",
+        whiteSpace: "nowrap",
+        borderLeft: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
+        borderTop: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke3}`,
+        ...typographyStyles.caption1Strong,
+        color: tokens.colorNeutralForeground2,
+        fontVariantNumeric: "tabular-nums",
+    },
+    tickSubLabel: {
+        ...typographyStyles.caption2,
+        lineHeight: "12px",
+        textTransform: "uppercase",
+    },
+    tickLabel: {
+        ...typographyStyles.caption1Strong,
+        lineHeight: "16px",
+    },
+    tickCellTwoLine: {
+        flexDirection: "column",
+        rowGap: "1px",
+        borderTop: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke3}`,
+    },
     tickCell: {
         display: "flex",
         alignItems: "center",
@@ -321,8 +447,8 @@ export const useGanttStyles = makeStyles({
     },
     tickCellToday: {
         ...typographyStyles.caption2Strong,
-        color: tokens.colorBrandForeground1,
-        backgroundColor: tokens.colorBrandBackground2,
+        color: tokens.colorNeutralForegroundInverted,
+        backgroundColor: tokens.colorNeutralBackgroundInverted,
     },
 
     track: {
@@ -360,22 +486,33 @@ export const useGanttStyles = makeStyles({
         position: "absolute",
         top: 0,
         bottom: 0,
-        width: "2px",
+        width: 0,
         marginLeft: "-1px",
         // Above the bars, but below the sticky task list so the line does not
         // bleed over the left pane once the timeline is scrolled.
         zIndex: 1,
         pointerEvents: "none",
-        backgroundColor: tokens.colorPaletteRedBorderActive,
-        opacity: 0.85,
+        borderLeft: `2px dashed ${tokens.colorNeutralForeground1}`,
+        opacity: 0.7,
+    },
+    /** The start of each week, drawn over every row. */
+    weekLine: {
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        width: 0,
+        pointerEvents: "none",
+        borderLeft: `${tokens.strokeWidthThin} dashed ${tokens.colorNeutralStroke1}`,
     },
     todayFlag: {
         position: "sticky",
-        top: "48px",
+        top: `var(${cssVars.headerHeight})`,
         display: "block",
         width: "8px",
         height: "8px",
-        marginLeft: "-3px",
+        // The flag starts after the marker's 2px border, which is centred on
+        // the time itself, so it steps back half its width plus that border.
+        marginLeft: "-5px",
         borderRadius: tokens.borderRadiusCircular,
         backgroundColor: tokens.colorPaletteRedBorderActive,
     },
@@ -448,6 +585,131 @@ export const useGanttStyles = makeStyles({
     barHandleEnd: {
         insetInlineEnd: "2px",
     },
+    /** White with a coloured outline and dark text, as a roster reads. */
+    barOutlined: {
+        backgroundColor: tokens.colorNeutralBackground1,
+        // The colour comes from the bar's palette, inline.
+        border: "2px solid transparent",
+        ":hover": { filter: "none", boxShadow: tokens.shadow4 },
+    },
+    barContent: {
+        position: "absolute",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        columnGap: tokens.spacingHorizontalXXS,
+        paddingInline: tokens.spacingHorizontalXS,
+        minWidth: 0,
+        pointerEvents: "none",
+    },
+    barLabel: {
+        minWidth: 0,
+        flexGrow: 1,
+        overflow: "hidden",
+        whiteSpace: "nowrap",
+        textOverflow: "ellipsis",
+        ...typographyStyles.caption2,
+        lineHeight: "14px",
+    },
+    barLabelOutlined: {
+        ...typographyStyles.caption2Strong,
+        lineHeight: "14px",
+        color: tokens.colorNeutralForeground1,
+    },
+    /** The bar runs on past the edge of the timeline. */
+    barChevron: {
+        flexShrink: 0,
+        fontSize: "12px",
+        lineHeight: "12px",
+        color: tokens.colorNeutralForeground2,
+    },
+    barBadge: {
+        flexShrink: 0,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minWidth: "14px",
+        height: "14px",
+        paddingInline: "3px",
+        boxSizing: "border-box",
+        borderRadius: tokens.borderRadiusCircular,
+        backgroundColor: tokens.colorNeutralForeground1,
+        color: tokens.colorNeutralForegroundInverted,
+        fontSize: "10px",
+        fontWeight: tokens.fontWeightSemibold,
+        lineHeight: "14px",
+        fontVariantNumeric: "tabular-nums",
+    },
+
+    /** Markers: records drawn as icons or tints in the days they cover. */
+    markerTint: {
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        pointerEvents: "none",
+    },
+    /** A tint answers hovering with its tooltip, but lets a click through to select the row. */
+    markerTintHoverable: {
+        pointerEvents: "auto",
+    },
+    marker: {
+        position: "absolute",
+        top: "50%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        height: "18px",
+        minWidth: "18px",
+        marginTop: "-9px",
+        boxSizing: "border-box",
+        borderRadius: tokens.borderRadiusSmall,
+        // Above the bars: an icon on a booked day is the clash the row is flagged for.
+        zIndex: 6,
+        cursor: "pointer",
+        fontSize: "16px",
+        backgroundColor: tokens.colorNeutralBackground1,
+        boxShadow: tokens.shadow2,
+        ":hover": { backgroundColor: tokens.colorNeutralBackground1Hover },
+        ":focus-visible": {
+            outline: `${tokens.strokeWidthThick} solid ${tokens.colorStrokeFocus2}`,
+        },
+    },
+    markerText: {
+        ...typographyStyles.caption2Strong,
+        whiteSpace: "nowrap",
+    },
+    /** An emoji typed as the icon, at the size the built-in icons are drawn. */
+    /**
+     * An icon moved up out of a bar's way, into the gap between the bar and the
+     * top of the row, and drawn smaller to fit there.
+     */
+    markerRaised: {
+        top: "0",
+        marginTop: 0,
+        height: "14px",
+        minWidth: "14px",
+        fontSize: "12px",
+    },
+    markerEmoji: {
+        // Follows the marker's own size, so a raised emoji shrinks with it.
+        fontSize: "0.9em",
+        lineHeight: "1",
+        fontFamily: '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif',
+    },
+    markerSelected: {
+        outline: `${tokens.strokeWidthThick} solid ${tokens.colorBrandStroke1}`,
+    },
+    /** A bar running into time its row is blocked out for. */
+    clash: {
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        pointerEvents: "none",
+        backgroundImage: `repeating-linear-gradient(135deg, ${tokens.colorPaletteDarkOrangeBorderActive} 0 2px, transparent 2px 7px)`,
+        backgroundColor: tokens.colorPaletteDarkOrangeBackground2,
+        opacity: 0.8,
+    },
+
     barSelected: {
         boxShadow: `0 0 0 ${tokens.strokeWidthThick} ${tokens.colorNeutralBackground1}, 0 0 0 calc(${tokens.strokeWidthThick} * 2) ${tokens.colorBrandStroke1}`,
     },
@@ -522,6 +784,18 @@ export const useGanttStyles = makeStyles({
     },
     tooltipLabel: {
         color: tokens.colorNeutralForeground3,
+    },
+    tooltipClashes: {
+        display: "flex",
+        flexDirection: "column",
+        rowGap: tokens.spacingVerticalXXS,
+        marginTop: tokens.spacingVerticalXS,
+        paddingTop: tokens.spacingVerticalXS,
+        borderTop: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
+    },
+    tooltipClashTitle: {
+        ...typographyStyles.caption1Strong,
+        color: tokens.colorPaletteDarkOrangeForeground1,
     },
 
     /** States ----------------------------------------------------------- */
@@ -618,6 +892,60 @@ export const useGanttStyles = makeStyles({
         justifyContent: "space-between",
         flexWrap: "wrap",
         columnGap: tokens.spacingHorizontalS,
+    },
+    /** One value in the value mapper, or one column in the column list. */
+    settingsListRow: {
+        display: "flex",
+        alignItems: "center",
+        flexWrap: "wrap",
+        columnGap: tokens.spacingHorizontalS,
+        rowGap: tokens.spacingVerticalXS,
+        paddingBlock: tokens.spacingVerticalXS,
+        borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke3}`,
+    },
+    settingsValue: {
+        display: "flex",
+        flexDirection: "column",
+        flexGrow: 1,
+        flexBasis: "120px",
+        minWidth: 0,
+        ...typographyStyles.body1,
+    },
+    settingsValueCount: {
+        ...typographyStyles.caption1,
+        color: tokens.colorNeutralForeground3,
+    },
+    settingsNarrow: {
+        width: "96px",
+        minWidth: "96px",
+    },
+    settingsSwatch: {
+        width: "14px",
+        height: "14px",
+        flexShrink: 0,
+        borderRadius: tokens.borderRadiusSmall,
+        border: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke1}`,
+    },
+    /** A swatch that opens the browser's colour picker when clicked. */
+    settingsSwatchButton: {
+        position: "relative",
+        overflow: "hidden",
+        cursor: "pointer",
+        ":focus-within": {
+            outline: `${tokens.strokeWidthThick} solid ${tokens.colorStrokeFocus2}`,
+        },
+    },
+    /** The native colour input, stretched invisibly over its swatch. */
+    settingsColorWell: {
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        margin: 0,
+        padding: 0,
+        border: "none",
+        opacity: 0,
+        cursor: "pointer",
     },
     settingsCode: {
         fontFamily: tokens.fontFamilyMonospace,

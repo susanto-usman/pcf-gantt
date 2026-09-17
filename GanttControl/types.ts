@@ -5,6 +5,15 @@ export type TimeScale = "day" | "week" | "month";
 /** Where a bar's colour comes from: the built-in time-based status, or a field on the record. */
 export type ColorMode = "status" | "field";
 
+/** Bars painted solid with a progress fill, or white with a coloured outline and a label. */
+export type BarStyle = "filled" | "outlined";
+
+/**
+ * How a record is drawn, as a display rule decides: a bar, an icon in each day
+ * it covers, a tint behind those days, or a bar in the unallocated pool.
+ */
+export type TaskKind = "bar" | "icon" | "tint" | "pool";
+
 export interface GanttTask {
     id: string;
     title: string;
@@ -25,6 +34,36 @@ export interface GanttTask {
     groupTitle?: string | null;
     /** True when the record refuses to be moved or resized, whatever the maker has allowed. */
     isLocked: boolean;
+    /** How the record is drawn. Absent means a bar. */
+    kind?: TaskKind;
+    /** The icon an icon record shows: a built-in icon name, or short text drawn as is. */
+    icon?: string | null;
+    /** A colour a display rule gave the record, which wins over the colour scheme. */
+    displayColor?: string | null;
+    /** What a display rule calls the record, e.g. "Annual leave". */
+    displayLabel?: string | null;
+    /** True for time the row is unavailable: a bar overlapping it is flagged as a clash. */
+    blocks?: boolean;
+    /** Text written on the bar, from the label field or template. */
+    label?: string | null;
+    /** How many the record stands for, shown as a badge when more than one. */
+    quantity?: number | null;
+    /** A second line under the row title, e.g. a role. */
+    subtitle?: string | null;
+    /** An image for the row's avatar. */
+    image?: string | null;
+    /** Values for the task list's dataset columns, keyed by lower-cased column name. */
+    cells?: Record<string, string>;
+}
+
+/**
+ * One column of the task list. Built-in columns are keyed with an @ (@name,
+ * @group, @start, @end, @progress); any other key is a dataset column.
+ */
+export interface ListColumn {
+    key: string;
+    label: string;
+    width: number;
 }
 
 /** A task placed in the hierarchy, flattened back out for rendering. */
@@ -47,6 +86,8 @@ export interface GanttRow {
     rollupStart: Date;
     rollupEnd: Date;
     rollupProgress: number;
+    /** The group heading the row sits under, for a task list that shows groups as a column. */
+    group?: { id: string; title: string };
 }
 
 /**
@@ -92,6 +133,8 @@ export interface TimelineTick {
     start: Date;
     end: Date;
     label: string;
+    /** A second, smaller line above the label: the weekday letter on the day scale. */
+    subLabel?: string;
     isToday: boolean;
     isNonWorking: boolean;
 }
@@ -105,6 +148,8 @@ export interface TimelineBand {
 export interface Timeline {
     ticks: TimelineTick[];
     bands: TimelineBand[];
+    /** Week numbers between the bands and the ticks, on the day scale only. */
+    weeks: TimelineBand[];
     start: Date;
     end: Date;
     scale: TimeScale;
@@ -138,6 +183,17 @@ export interface GanttChartProps {
     showCurrentTime: boolean;
     showProgress: boolean;
     showLegend: boolean;
+    barStyle: BarStyle;
+    /** The task list's columns in order; null keeps the built-in name, dates and progress. */
+    listColumns: ListColumn[] | null;
+    /** Where the user's choice of hidden columns is kept, so each chart keeps its own. */
+    columnsStorageKey: string;
+    /** An avatar before each row title. */
+    showAvatars: boolean;
+    /** Heading for records a display rule sends to the unallocated pool. */
+    poolTitle: string;
+    /** Notes for the maker about the display rules, e.g. values no rule maps. Shown with the settings button only. */
+    displayNotes: string[];
     /** Shows the settings button, which only a maker should see. */
     showSettings: boolean;
     /** Opens the settings panel; supplied by the view, not by the control. */

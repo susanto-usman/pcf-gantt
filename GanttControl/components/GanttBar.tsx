@@ -1,8 +1,8 @@
 import { mergeClasses, Tooltip } from "@fluentui/react-components";
 import * as React from "react";
-import { BarPalette } from "../colors";
+import { BarPalette, textOnFill } from "../colors";
 import { cssVars, useGanttStyles } from "../styles";
-import { DragMode, EditPermissions, GanttTask, TaskEdit } from "../types";
+import { BarStyle, DragMode, EditPermissions, GanttTask, TaskEdit } from "../types";
 import { applyDrag, clampDragDays, formatDateTime } from "../utils";
 import { GanttBarTooltipContent, useCursorTooltip } from "./GanttBarTooltip";
 
@@ -24,6 +24,10 @@ export interface BarLayout {
     /** Names the label in the tooltip, e.g. "Status". */
     caption: string;
     isMilestone: boolean;
+    /** The bar starts before the timeline does, and is cut off there. */
+    clippedStart: boolean;
+    /** The bar ends after the timeline does. */
+    clippedEnd: boolean;
 }
 
 /**
@@ -48,7 +52,10 @@ export interface GanttBarProps {
     isSelected: boolean;
     /** True while this bar's own edit is published but not yet settled by the data. */
     isPending: boolean;
+    /** Unavailable time on the row this bar runs into, named in its tooltip. */
+    clashes?: readonly GanttTask[];
     showProgress: boolean;
+    barStyle: BarStyle;
     /** Which gestures the maker allows; a summary bar is never editable whatever this says. */
     canEdit: EditPermissions;
     onSelect: (taskId: string) => void;
@@ -64,14 +71,30 @@ export const GanttBar: React.FC<GanttBarProps> = ({
     overlap,
     isSelected,
     isPending,
+    clashes,
     showProgress,
+    barStyle,
     canEdit,
     onSelect,
     onOpen,
     onEdit,
 }) => {
     const styles = useGanttStyles();
-    const { left, width, start, end, progress, palette, label, caption, isMilestone, pixelsPerDay } = layout;
+    const {
+        left,
+        width,
+        start,
+        end,
+        progress,
+        palette,
+        label,
+        caption,
+        isMilestone,
+        pixelsPerDay,
+        clippedStart,
+        clippedEnd,
+    } = layout;
+    const isOutlined = barStyle === "outlined";
 
     /**
      * The drag in flight, held here rather than in the chart so that a pointer
@@ -233,6 +256,11 @@ export const GanttBar: React.FC<GanttBarProps> = ({
         onPointerMove: cursorTooltip.onPointerMove,
     };
 
+    // An outlined bar is a roster's card, so it names itself even without a label field.
+    const text = task.label ?? (isOutlined ? task.title : null);
+    const badge = task.quantity !== null && task.quantity !== undefined && task.quantity > 1 ? task.quantity : null;
+    const hasContent = Boolean(text) || badge !== null || clippedStart || clippedEnd;
+
     const tooltipProps = {
         content: (
             <GanttBarTooltipContent
@@ -244,6 +272,7 @@ export const GanttBar: React.FC<GanttBarProps> = ({
                 showProgress={showProgress}
                 isSummary={isSummary}
                 showLock={showLock}
+                clashes={clashes}
             />
         ),
         relationship: "description" as const,
@@ -292,6 +321,7 @@ export const GanttBar: React.FC<GanttBarProps> = ({
                 ref={barRef}
                 className={mergeClasses(
                     styles.bar,
+                    isOutlined && styles.barOutlined,
                     canMove && styles.barDraggable,
                     drag !== null && styles.barDragging,
                     isPending && styles.barPending,
@@ -301,7 +331,7 @@ export const GanttBar: React.FC<GanttBarProps> = ({
                 style={{
                     left: `${shownLeft}px`,
                     width: `${Math.max(4, shownWidth)}px`,
-                    backgroundColor: palette.track,
+                    ...(isOutlined ? { borderColor: palette.fill } : { backgroundColor: palette.track }),
                     // Every bar in the stack stays centred on the row, so the
                     // added height shows above and below the bar on top.
                     ...(overlap && {
@@ -310,31 +340,59 @@ export const GanttBar: React.FC<GanttBarProps> = ({
                     }),
                 }}
             >
-                <div
-                    className={styles.barFill}
-                    style={{
-                        width: showProgress ? `${Math.max(0, Math.min(100, progress))}%` : "100%",
-                        backgroundColor: palette.fill,
-                    }}
-                />
+                {!isOutlined && (
+                    <div
+                        className={styles.barFill}
+                        style={{
+                            width: showProgress ? `${Math.max(0, Math.min(100, progress))}%` : "100%",
+                            backgroundColor: palette.fill,
+                        }}
+                    />
+                )}
+
+                {hasContent && (
+                    <div className={styles.barContent} aria-hidden="true">
+                        {clippedStart && <span className={styles.barChevron}>‹</span>}
+                        {badge !== null && <span className={styles.barBadge}>{badge}</span>}
+                        {text && (
+                            <span
+                                className={mergeClasses(styles.barLabel, isOutlined && styles.barLabelOutlined)}
+                                // On a solid bar the text reads against the bar's colour: dark on a light one, white on a dark one.
+                                style={isOutlined ? undefined : { color: textOnFill(palette.fill) }}
+                            >
+                                {text}
+                            </span>
+                        )}
+                        {clippedEnd && (
+                            <span className={styles.barChevron} style={{ marginInlineStart: "auto" }}>
+                                ›
+                            </span>
+                        )}
+                    </div>
+                )}
 
                 {/* Gated on the settled width, not the previewed one: a grip that
                     vanished part-way through its own drag would take the pointer
                     capture with it and leave the bar stuck to the cursor. */}
                 {canResize && width >= MIN_RESIZE_WIDTH && (
                     <>
-                        <div
-                            className={mergeClasses(styles.barHandle, styles.barHandleStart, "gantt-bar-handle")}
-                            aria-hidden="true"
-                            onPointerDown={(event) => startDrag(event, "start")}
-                            onClick={(event) => event.stopPropagation()}
-                        />
-                        <div
-                            className={mergeClasses(styles.barHandle, styles.barHandleEnd, "gantt-bar-handle")}
-                            aria-hidden="true"
-                            onPointerDown={(event) => startDrag(event, "end")}
-                            onClick={(event) => event.stopPropagation()}
-                        />
+                        {/* A cut-off end is not where the record ends, so it has no grip. */}
+                        {!clippedStart && (
+                            <div
+                                className={mergeClasses(styles.barHandle, styles.barHandleStart, "gantt-bar-handle")}
+                                aria-hidden="true"
+                                onPointerDown={(event) => startDrag(event, "start")}
+                                onClick={(event) => event.stopPropagation()}
+                            />
+                        )}
+                        {!clippedEnd && (
+                            <div
+                                className={mergeClasses(styles.barHandle, styles.barHandleEnd, "gantt-bar-handle")}
+                                aria-hidden="true"
+                                onPointerDown={(event) => startDrag(event, "end")}
+                                onClick={(event) => event.stopPropagation()}
+                            />
+                        )}
                     </>
                 )}
             </div>

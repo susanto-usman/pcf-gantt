@@ -749,29 +749,139 @@ describe("settings view", () => {
     });
 });
 
-describe("applying settings", () => {
-    const rows = [{ id: "1", title: "Swing", startDate: "2024-01-01", endDate: "2024-01-02", crew: "Mech" }];
+describe("display rules", () => {
+    const base = { startDate: "2026-04-20", endDate: "2026-04-21" };
+    const rows = [
+        { id: "1", title: "Rigger", employee: "Jess", type: "Day shift", status: "Active", ...base },
+        { id: "2", title: "Leave", employee: "Jess", type: "annual leave", status: "Active", ...base },
+        { id: "3", title: "Open", employee: "", type: "Day shift", status: "Active", ...base },
+        { id: "4", title: "Old", employee: "Jess", type: "Day shift", status: "Cancelled", ...base },
+        { id: "5", title: "Sick", employee: "Jess", type: "Sick", status: "Active", ...base },
+    ];
+    const display = [
+        { when: { status: "Cancelled" }, as: "hide" },
+        { when: { type: ["Annual Leave"] }, as: "icon", icon: "plane", color: "#D13438", blocks: true },
+        { when: { employee: { blank: true } }, as: "pool" },
+    ];
 
-    it("publishes nothing until settings are applied", () => {
-        const { control } = render({ rows });
+    it("draws each record as its first matching rule says, and leaves the rest as bars", () => {
+        const { props } = render({ rows, fields: { row: "employee" }, options: { display } });
 
-        expect(control.getOutputs()).toMatchObject({ draftFields: "", draftOptions: "" });
+        expect(props.tasks.map((item) => [item.id, item.kind ?? "bar"])).toEqual([
+            ["1", "bar"],
+            ["2", "icon"],
+            ["3", "pool"],
+            ["5", "bar"],
+        ]);
+        expect(props.tasks[1]).toMatchObject({ icon: "plane", displayColor: "#D13438", blocks: true });
     });
 
-    it("publishes both settings as compact JSON and tells the host", () => {
-        const control = new GanttControl();
-        const notify = vi.fn();
-        const { context, dataset } = mockContext({ rows });
+    it("takes a hidden record out of selection too", () => {
+        const { props, dataset } = render({ rows, fields: { row: "employee" }, options: { display } });
 
-        control.init(context, notify);
-        viewOf(control, context).onApply('{\n    "group": "crew"\n}', '{ "density": "compact" }');
+        props.onSelectRow("Jess");
 
-        expect(control.getOutputs()).toMatchObject({
-            draftFields: '{"group":"crew"}',
-            draftOptions: '{"density":"compact"}',
+        expect(dataset.setSelectedRecordIds).toHaveBeenLastCalledWith(["1", "2", "5"]);
+    });
+
+    it("tells a maker which values the value mapper has not mapped", () => {
+        const { props } = render({ rows, options: { display, showSettings: true } });
+
+        expect(props.displayNotes).toEqual(['2 values in type are not mapped and show as bars: "Day shift", "Sick"']);
+        expect(render({ rows, options: { display } }).props.displayNotes).toEqual([]);
+    });
+
+    it("lists a column's values, most common first, for the value mapper", () => {
+        const { control, context } = render({ rows });
+
+        expect(viewOf(control, context).valuesOf("type")).toEqual([
+            { value: "Day shift", count: 3 },
+            { value: "annual leave", count: 1 },
+            { value: "Sick", count: 1 },
+        ]);
+    });
+
+    it("reports a rule column the dataset does not have", () => {
+        const { props } = render({ rows, options: { display: [{ when: { absence: "AL" }, as: "icon" }] } });
+
+        expect(props.unmatchedFields).toEqual([{ setting: "display", field: "absence" }]);
+    });
+});
+
+describe("roster fields and columns", () => {
+    const rows = [
+        {
+            id: "1",
+            title: "Shift",
+            startDate: "2026-04-20",
+            endDate: "2026-04-21",
+            role: "Rigger",
+            job: "200T Crane",
+            count: "2",
+            position: "Supervisor",
+            team: "North",
+        },
+    ];
+
+    it("reads the bar label template, quantity and subtitle", () => {
+        const { props } = render({
+            rows,
+            fields: { label: "{role} · {job} · {missing}", quantity: "count", subtitle: "position" },
         });
-        expect(notify).toHaveBeenCalledTimes(1);
-        // Applying is about the settings alone: no record is touched or selected.
-        expect(dataset.setSelectedRecordIds).not.toHaveBeenCalled();
+
+        expect(props.tasks[0]).toMatchObject({ label: "Rigger · 200T Crane", quantity: 2, subtitle: "Supervisor" });
+    });
+
+    it("keeps the built-in columns when none are set", () => {
+        expect(render({ rows }).props.listColumns).toBeNull();
+    });
+
+    it("takes the view's columns, less those the name already shows", () => {
+        const { props } = render({ rows, options: { columns: "view" } });
+
+        expect(props.listColumns?.map((column) => column.key)).toEqual([
+            "@name",
+            "id",
+            "startdate",
+            "enddate",
+            "role",
+            "job",
+            "count",
+            "position",
+            "team",
+        ]);
+        expect(props.tasks[0].cells).toMatchObject({ role: "Rigger", team: "North" });
+    });
+
+    it("takes a list in order, always with a name column, and reads each column's values", () => {
+        const { props } = render({
+            rows,
+            options: { columns: ["@group", { name: "team", label: "Crew", width: 90 }] },
+        });
+
+        expect(props.listColumns).toEqual([
+            { key: "@group", label: "Group", width: 140 },
+            { key: "@name", label: "Task", width: 0 },
+            { key: "team", label: "Crew", width: 90 },
+        ]);
+        expect(props.tasks[0].cells).toEqual({ team: "North" });
+    });
+
+    it("asks a host that can add columns for the ones the settings need, once each", () => {
+        const { context, dataset } = mockContext({ rows, options: { columns: ["team", "absence"] } });
+        const host = dataset as typeof dataset & {
+            addColumn: ReturnType<typeof vi.fn>;
+            refresh: ReturnType<typeof vi.fn>;
+        };
+        host.addColumn = vi.fn();
+        host.refresh = vi.fn();
+        const control = new GanttControl();
+
+        control.init(context, vi.fn());
+        renderAgain(control, context);
+        renderAgain(control, context);
+
+        expect(host.addColumn.mock.calls).toEqual([["absence"]]);
+        expect(host.refresh).toHaveBeenCalledTimes(1);
     });
 });

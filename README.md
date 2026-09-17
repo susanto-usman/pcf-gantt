@@ -33,6 +33,7 @@ and high contrast, in both model-driven and canvas apps.
 | Data          | Dataset paging is loaded progressively as the user scrolls, so the chart is not limited to the first page.                                                                                                     |
 | Performance   | Rows are windowed, so only the visible slice is rendered.                                                                                                                                                      |
 | Editing       | Drag a bar to reschedule it, or drag either end to resize it. Off by default, and `fields.locked` exempts individual records; the control publishes each edit and your app saves it — see [Editing](#editing). |
+| Rosters       | Outlined bars with labels and count badges, week numbers, a team column, leave as icons, availability as tints, clashes flagged, and an unallocated pool. See [Roster view](#roster-view).                     |
 | Accessibility | Grid semantics, a keyboard-resizable splitter, a roving tab stop, and Fluent tooltips on every bar.                                                                                                            |
 
 ### Properties
@@ -76,6 +77,11 @@ In a model-driven app, type the JSON straight into the property.
 | `category` | —           | A label shown in the tooltip.                                                                                                                                                        |
 | `color`    | —           | The value each bar is coloured by when `options.colorBy` is `field`. Falls back to `category`.                                                                                       |
 | `locked`   | —           | A column marking records that may not be rescheduled. See [Locking individual tasks](#locking-individual-tasks).                                                                     |
+| `label`    | —           | Text on each bar: a column, or a template such as `{role} · {job}`. A blank placeholder takes its separator with it.                                                                 |
+| `quantity` | —           | A number shown as a badge on bars standing for more than one, e.g. a shift needing 5 people.                                                                                         |
+| `subtitle` | —           | A second line under the row title, e.g. a role.                                                                                                                                      |
+| `image`    | —           | A picture for the row avatar, with `options.showAvatars`. Initials are used without one.                                                                                             |
+| `icon`     | —           | For records a display rule draws as an icon: the icon to show, when the record names its own.                                                                                        |
 
 `task`, `group` and `row` take either a column name, or `{ "id": ..., "label": ... }` to key by one column
 and show another — e.g. `"row": { "id": "employee.id", "label": "employee.name" }`, so two people sharing a
@@ -94,20 +100,25 @@ have.
 
 #### Options
 
-| Key               | Default       | Does                                                                                          |
-| ----------------- | ------------- | --------------------------------------------------------------------------------------------- |
-| `density`         | `comfortable` | Initial density: `comfortable` (Detailed) or `compact`.                                       |
-| `timeScale`       | `day`         | Initial zoom: `day`, `week` or `month`.                                                       |
-| `colorBy`         | `status`      | `status` for the built-in time-based scheme, or `field` to colour by `fields.color`.          |
-| `legend`          | —             | Your own colours and legend labels. See [Colours and the legend](#colours-and-the-legend).    |
-| `showToolbar`     | `true`        | The toolbar with search, filter chips, zoom and density.                                      |
-| `showCurrentTime` | `true`        | The marker for the current time.                                                              |
-| `showProgress`    | `true`        | Progress fills on bars and the progress column.                                               |
-| `showLegend`      | `true`        | The legend along the bottom.                                                                  |
-| `groupRows`       | `true`        | Merges records sharing a `fields.row` value onto one row. Off gives every record its own row. |
-| `allowMove`       | `false`       | Lets a user drag a bar along the timeline. See [Editing](#editing).                           |
-| `allowResize`     | `false`       | Lets a user drag either end of a bar.                                                         |
-| `showSettings`    | `false`       | Shows the settings button. For makers only — see [The settings panel](#the-settings-panel).   |
+| Key               | Default       | Does                                                                                                                 |
+| ----------------- | ------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `density`         | `comfortable` | Initial density: `comfortable` (Detailed) or `compact`.                                                              |
+| `timeScale`       | `day`         | Initial zoom: `day`, `week` or `month`.                                                                              |
+| `colorBy`         | `status`      | `status` for the built-in time-based scheme, or `field` to colour by `fields.color`.                                 |
+| `legend`          | —             | Your own colours and legend labels. See [Colours and the legend](#colours-and-the-legend).                           |
+| `showToolbar`     | `true`        | The toolbar with search, filter chips, zoom and density.                                                             |
+| `showCurrentTime` | `true`        | The marker for the current time.                                                                                     |
+| `showProgress`    | `true`        | Progress fills on bars and the progress column.                                                                      |
+| `showLegend`      | `true`        | The legend along the bottom.                                                                                         |
+| `groupRows`       | `true`        | Merges records sharing a `fields.row` value onto one row. Off gives every record its own row.                        |
+| `allowMove`       | `false`       | Lets a user drag a bar along the timeline. See [Editing](#editing).                                                  |
+| `allowResize`     | `false`       | Lets a user drag either end of a bar.                                                                                |
+| `showSettings`    | `false`       | Shows the settings button. For makers only — see [The settings panel](#the-settings-panel).                          |
+| `barStyle`        | `filled`      | `filled`, or `outlined` for white bars with a coloured edge and a label.                                             |
+| `showAvatars`     | `false`       | An avatar before each row title.                                                                                     |
+| `columns`         | —             | The task list columns. See [Task list columns](#task-list-columns).                                                  |
+| `display`         | —             | Rules for drawing records as icons, tints, the unallocated pool, or not at all. See [Display rules](#display-rules). |
+| `poolTitle`       | `Unallocated` | Heading for the unallocated pool.                                                                                    |
 
 Density and time scale are only where the chart starts: the toolbar changes them after that.
 
@@ -125,34 +136,6 @@ opens a panel with every field and option:
   a model-driven app, or as a `JSON({...})` formula for a canvas app — with a button to copy each one. Paste
   them into Field mapping and Options; once a property holds the new value, the preview of it ends by itself.
   **Discard** on the banner drops the preview instead.
-- **Apply** skips the pasting in a canvas app. It publishes both settings through the `draftFields` and
-  `draftOptions` outputs and fires `OnChange`; the app stores them and reads the properties back from the store.
-
-**Saving with Apply in a canvas app.** A property cannot read the control's own output — that is a circular
-reference — so the settings go through a table, which also keeps them across sessions. With a `GanttSettings`
-table holding `Name`, `Fields` and `Options` text columns:
-
-```
-// OnChange of the control. OnChange also fires for selections and edits, so only save a change.
-With(
-    { saved: LookUp(GanttSettings, Name = "Roster") },
-    If(
-        !IsBlank(Self.draftFields) &&
-            (Self.draftFields <> saved.Fields || Self.draftOptions <> saved.Options),
-        Patch(GanttSettings, saved, { Fields: Self.draftFields, Options: Self.draftOptions })
-    )
-)
-
-// Field mapping
-LookUp(GanttSettings, Name = "Roster").Fields
-
-// Options
-LookUp(GanttSettings, Name = "Roster").Options
-```
-
-Once the properties pick up the stored values, the preview ends by itself: the chart is showing the saved
-settings. The settings can then change without republishing the app. A model-driven form cannot take its
-properties from data, so there the panel's Copy buttons remain the way to save.
 
 Turn `showSettings` off again before the app goes to users: the canvas runtime gives a control no reliable way
 to tell the studio from a published app, so the button is shown wherever the option is on.
@@ -195,6 +178,89 @@ Overdue = #B10E1C; At risk = #F7630C; Complete = #0F7B0F
 Set `options.showLegend` off to keep the colours but drop the legend from the status bar.
 
 Clicking a swatch filters the chart to bars of that colour; each colour picked shows as a chip in the toolbar, where it can be removed.
+
+### Roster view
+
+A resource roster in the style of a workforce scheduler is these settings together:
+
+```
+Field mapping
+{ "row": "employee", "group": "team", "subtitle": "role",
+  "label": "{role} · {job}", "quantity": "headcount", "category": "resourceType" }
+
+Options
+{ "barStyle": "outlined", "showProgress": false, "showAvatars": true,
+  "columns": [{ "name": "@group", "label": "Team" }, { "name": "@name", "label": "Resource" }],
+  "poolTitle": "Unallocated shifts",
+  "display": [
+      { "when": { "status": "Cancelled" }, "as": "hide" },
+      { "when": { "type": ["Annual Leave", "AL"] }, "as": "icon", "icon": "plane", "color": "#C4314B", "blocks": true },
+      { "when": { "type": "RDO" }, "as": "icon", "icon": "home", "blocks": true },
+      { "when": { "travel": "Flight in" }, "as": "icon", "icon": "flight-in" },
+      { "when": { "travel": "Flight out" }, "as": "icon", "icon": "flight-out" },
+      { "when": { "type": "Available" }, "as": "tint", "color": "#6BB700" },
+      { "when": { "employee": { "blank": true } }, "as": "pool" }
+  ] }
+```
+
+On the day scale the header shows the month, the ISO week number, and each day with its weekday, with today in
+a dark box and a dashed line down the chart. A dashed rule marks the start of each week. A bar running past a
+`start` or `end` boundary is cut off there and shows `‹` or `›`.
+
+#### Display rules
+
+Data from Dataverse rarely has a column that says how the chart should draw a record, so `options.display`
+decides from the columns the records already have. Rules are tried in order and the first match wins. A record
+no rule matches is a plain bar, so a new or misspelt value shows up looking wrong rather than disappearing.
+
+| `as`   | Draws the record                                                                                                      |
+| ------ | --------------------------------------------------------------------------------------------------------------------- |
+| `bar`  | As a bar. Useful with `color` to recolour some bars.                                                                  |
+| `icon` | As an icon in each day it covers (one in the middle on the week and month scales). Several on a day sit side by side. |
+| `tint` | As a tint behind the days it covers, e.g. availability.                                                               |
+| `pool` | As a bar in the unallocated pool, packed into as few rows as fit, above everything else.                              |
+| `hide` | Not at all. It cannot be selected either.                                                                             |
+
+`when` holds one condition per column, and every one must hold. Values are compared trimmed and ignoring case:
+
+| Condition                          | Matches                                                                                                          |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `"AL"` or `["AL", "Annual Leave"]` | The value, or any value in the list.                                                                             |
+| `{ "contains": "leave" }`          | Part of the value. `startsWith` does the same for the beginning.                                                 |
+| `{ "blank": true }`                | No value.                                                                                                        |
+| `{ "value": 2 }`                   | The raw value: a choice column's number, which survives its label being renamed or translated, or a lookup's id. |
+| `{ "not": ... }`                   | Anything the condition inside does not.                                                                          |
+
+`icon` names a built-in icon (plane, flight-in, flight-out, home, sick, training, car, clock, lock, star, check, cross, warning, flag,
+person, calendar, dot); anything else is drawn as short text. `color` sets the icon, tint or bar colour.
+`blocks: true` marks unavailable time: a bar on the same row overlapping it is hatched, and the row gets a
+warning flag.
+
+**The value mapper.** Under **Display** in the settings panel, pick a column and every value in the loaded
+records is listed with its count, to draw as a bar, icon, tint, the pool, or not at all. It writes the rules for
+you and keeps any rule you wrote by hand. While `showSettings` is on, a notice lists values of a column mapped to
+icons or tints that no rule covers.
+
+**When a rule is not enough.** If deciding needs dates, several tables or more than a few conditions, add a
+Dataverse formula column that works out a short code (`leave`, `rdo`, `shift`) and map that. It works the same in
+model-driven and canvas apps and keeps the logic in one place. Avoid `AddColumns` in a canvas app for this: the
+query is then no longer delegated, so only the first rows reach the chart.
+
+A column a rule names must come with the dataset. In a model-driven app the control asks for a plain column the
+view lacks by itself; a related column has to be added to the view. In a canvas app, add it under Fields.
+
+#### Task list columns
+
+`options.columns` replaces the built-in Task, Start, Finish and Progress columns:
+
+- `"view"`: the name column, then every column in the view, in the view's order.
+- A list, such as `["@group", { "name": "@name", "label": "Resource", "width": 200 }, "role", "crew.name"]`.
+  Built-in columns start with `@` (`@name`, `@group`, `@start`, `@end`, `@progress`); anything else is a dataset
+  column, shown with its formatted value. `label` and `width` are optional.
+
+`@group` shows groups as a column down the left, labelled once over their rows, instead of as heading rows. The
+name column is always there, as it holds the tree. Users can hide columns from the toolbar's column menu, and the
+choice is remembered in their browser.
 
 ### Editing
 

@@ -2,9 +2,26 @@ import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import * as React from "react";
 import { GanttControlView } from "./components/GanttControlView";
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
-import { DEFAULT_FIELDS, FieldSettings, KeyedField, OptionSettings, parseFields, parseOptions } from "./settings";
-import { EditPermissions, GanttChartProps, GanttTask, TaskEdit } from "./types";
-import { exclusiveEnd, GROUP_ROW_PREFIX, startOfDay, toLocalIso } from "./utils";
+import {
+    CellReader,
+    matchDisplayRule,
+    normaliseText,
+    readValueMap,
+    renderTemplate,
+    ruleColumns,
+    templateColumns,
+} from "./display";
+import {
+    BUILT_IN_COLUMNS,
+    DEFAULT_FIELDS,
+    FieldSettings,
+    KeyedField,
+    OptionSettings,
+    parseFields,
+    parseOptions,
+} from "./settings";
+import { EditPermissions, GanttChartProps, GanttTask, ListColumn, TaskEdit } from "./types";
+import { exclusiveEnd, GROUP_ROW_PREFIX, POOL_GROUP_ID, startOfDay, toLocalIso } from "./utils";
 
 type DatasetRecord = ComponentFramework.PropertyHelper.DataSetApi.EntityRecord;
 
@@ -77,6 +94,32 @@ const SAMPLED_RECORDS = 25;
 /** Values a flag column can carry that mean "no", whatever the host's data type. */
 const FALSEY = new Set(["false", "no", "n", "0", "off", "unlocked"]);
 
+/** Most unmapped values a note names before it just counts the rest. */
+const NOTED_VALUES = 5;
+
+/** Widths the task list gives columns that do not set their own. */
+const DEFAULT_COLUMN_WIDTHS: Record<string, number> = {
+    "@name": 0,
+    "@group": 140,
+    "@start": 72,
+    "@end": 72,
+    "@progress": 88,
+};
+const DATASET_COLUMN_WIDTH = 120;
+
+function sameCells(left: Record<string, string> | undefined, right: Record<string, string> | undefined): boolean {
+    if (left === right) {
+        return true;
+    }
+
+    const leftKeys = Object.keys(left ?? {});
+
+    return (
+        leftKeys.length === Object.keys(right ?? {}).length &&
+        leftKeys.every((key) => (left ?? {})[key] === (right ?? {})[key])
+    );
+}
+
 /** Whether two builds of the task list describe the same records, field for field. */
 function sameTasks(previous: GanttTask[], next: GanttTask[]): boolean {
     if (previous.length !== next.length) {
@@ -87,6 +130,16 @@ function sameTasks(previous: GanttTask[], next: GanttTask[]): boolean {
         const was = previous[index];
 
         return (
+            was.kind === task.kind &&
+            was.icon === task.icon &&
+            was.displayColor === task.displayColor &&
+            was.displayLabel === task.displayLabel &&
+            was.blocks === task.blocks &&
+            was.label === task.label &&
+            was.quantity === task.quantity &&
+            was.subtitle === task.subtitle &&
+            was.image === task.image &&
+            sameCells(was.cells, task.cells) &&
             was.id === task.id &&
             was.title === task.title &&
             was.start.getTime() === task.start.getTime() &&
@@ -134,13 +187,8 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
      * stamp in the JSON, dragging a bar back where it was would reach nobody.
      */
     private changeStamp = 0;
-    /**
-     * Settings the maker applied from the settings panel, as compact JSON, for
-     * the app to store and feed back into Field mapping and Options. A control
-     * cannot write its own input properties, so this is the only way back.
-     */
-    private draftFields = "";
-    private draftOptions = "";
+    /** Columns already asked of the host with addColumn, so each is asked for once. */
+    private requestedColumns = new Set<string>();
 
     public init(context: ComponentFramework.Context<IInputs>, notifyOutputChanged: () => void): void {
         this.notifyOutputChanged = notifyOutputChanged;
@@ -166,9 +214,9 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
                 fields: context.parameters.fields?.raw ?? "",
                 options: context.parameters.options?.raw ?? "",
                 columns: this.columnChoices(this.dataset),
+                valuesOf: this.columnValues,
                 build: this.buildChart,
                 version: this.updateCount,
-                onApply: this.handleApplySettings,
             })
         );
     }
@@ -184,12 +232,14 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
         const dataset = context.parameters.tasks;
         const fields = parseFields(fieldsText);
         const options = parseOptions(optionsText);
-        const built = this.buildTasks(dataset, fields.value, options.value.groupRows);
+        const listColumns = this.resolveListColumns(dataset, fields.value, options.value);
+        const built = this.buildTasks(dataset, fields.value, options.value, listColumns);
 
         // The chart derives the rows, the timeline and the parent index from
         // this array, so handing back the same instance when the records have
         // not changed keeps a selection from rebuilding all of it.
         this.tasks = sameTasks(this.tasks, built) ? this.tasks : built;
+        this.requestMissingColumns(dataset, fields.value, options.value, listColumns);
 
         const paging = dataset.paging;
 
@@ -197,8 +247,15 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             tasks: this.tasks,
             recordCount: dataset.sortedRecordIds ? dataset.sortedRecordIds.length : 0,
             availableColumns: (dataset.columns ?? []).map((column) => column.name),
-            unmatchedFields: this.findUnmatchedFields(dataset, fields.value, options.value.groupRows),
+            unmatchedFields: this.findUnmatchedFields(dataset, fields.value, options.value, listColumns),
             settingProblems: [...fields.problems, ...options.problems],
+            barStyle: options.value.barStyle,
+            listColumns,
+            columnsStorageKey: this.columnsStorageKey(dataset, listColumns),
+            showAvatars: options.value.showAvatars,
+            poolTitle: options.value.poolTitle,
+            // Only worked out for a maker, as it reads every record again.
+            displayNotes: options.value.showSettings ? this.findUnmappedValues(dataset, options.value) : [],
             dateFieldNames: { start: fields.value.start, end: fields.value.end },
             selectedTaskId: this.selectedTaskId,
             selectedRowId: this.selectedRowId,
@@ -272,13 +329,6 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
         this.notifyOutputChanged();
     };
 
-    private readonly handleApplySettings = (fields: string, options: string): void => {
-        // Compact, as the app stores it in a text column rather than showing it.
-        this.draftFields = JSON.stringify(JSON.parse(fields));
-        this.draftOptions = JSON.stringify(JSON.parse(options));
-        this.notifyOutputChanged();
-    };
-
     private readonly handleLoadMore = (): void => {
         const paging = this.dataset?.paging;
 
@@ -318,8 +368,6 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
                 ? this.selectedRowId.slice(GROUP_ROW_PREFIX.length)
                 : this.selectedRowId,
             lastEdit: this.lastEdit,
-            draftFields: this.draftFields,
-            draftOptions: this.draftOptions,
         };
     }
 
@@ -347,8 +395,10 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
     private buildTasks(
         dataset: ComponentFramework.PropertyTypes.DataSet,
         fields: FieldSettings,
-        groupRows: boolean
+        options: OptionSettings,
+        listColumns: ListColumn[] | null
     ): GanttTask[] {
+        const { groupRows, display: rules } = options;
         const tasks: GanttTask[] = [];
 
         this.recordIdOf = new Map<string, string>();
@@ -380,11 +430,40 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
         // Merging is switched off by blanking the row key, so no record shares a row.
         const rowField = groupRows ? field(fields.row.id) : unset;
         const rowTitleField = groupRows ? field(fields.row.label) : unset;
+        const quantityField = field(fields.quantity);
+        const subtitleField = field(fields.subtitle);
+        const imageField = field(fields.image);
+        const iconField = field(fields.icon);
+        // Rules and templates name columns freely, so each is resolved once and kept.
+        const refs = new Map<string, FieldRef>();
+        const ref = (name: string) => {
+            const key = name.toLowerCase();
+            let found = refs.get(key);
+
+            if (!found) {
+                found = field(name);
+                refs.set(key, found);
+            }
+
+            return found;
+        };
+        const cellColumns = (listColumns ?? []).filter((column) => !column.key.startsWith("@"));
 
         for (const recordId of dataset.sortedRecordIds) {
             const record = dataset.records[recordId];
 
             if (!record) {
+                continue;
+            }
+
+            const reader: CellReader = {
+                text: (column) => this.readText(record, ref(column)),
+                raw: (column) => this.readValue(record, ref(column)),
+            };
+            const rule = rules.length > 0 ? matchDisplayRule(rules, reader) : null;
+
+            // Hidden records are gone before anything else looks at them, selection included.
+            if (rule?.as === "hide") {
                 continue;
             }
 
@@ -407,15 +486,37 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             // and any other row by the one task it carries.
             const rowId = rowKey ?? id;
 
+            const kind = rule && rule.as !== "bar" ? rule.as : undefined;
+
             this.recordIdOf.set(id, recordId);
-            this.addToRow(rowId, recordId);
+
+            // Mirrors buildRows: the pool is packed into lanes the chart works
+            // out from the live dates, so only its heading stands for its records.
+            if (kind === "pool") {
+                this.addToRow(POOL_GROUP_ID, recordId);
+            } else {
+                this.addToRow(rowId, recordId);
+            }
 
             // Mirrors buildRows, which gathers records without a value under a
             // heading of their own once any record has one.
             const groupKey = this.readText(record, groupField);
-            this.addToRow(`${GROUP_ROW_PREFIX}${groupKey ?? ""}`, recordId);
+
+            if (kind !== "pool") {
+                this.addToRow(`${GROUP_ROW_PREFIX}${groupKey ?? ""}`, recordId);
+            }
 
             const category = this.readText(record, categoryField);
+            const quantity = quantityField.column ? this.readNumber(record, quantityField, NaN) : NaN;
+            let cells: Record<string, string> | undefined;
+
+            if (cellColumns.length > 0) {
+                cells = {};
+
+                for (const column of cellColumns) {
+                    cells[column.key] = this.readText(record, ref(column.key)) ?? "";
+                }
+            }
 
             tasks.push({
                 id,
@@ -433,10 +534,230 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
                 groupKey,
                 groupTitle: groupKey === null ? null : this.readText(record, groupTitleField),
                 isLocked: this.readFlag(record, lockedField),
+                // Left undefined rather than null when unused, so a chart that
+                // uses none of this carries the same tasks it always did.
+                kind,
+                icon: kind === "icon" ? (this.readText(record, iconField) ?? (rule?.icon || null)) : undefined,
+                displayColor: rule?.color || undefined,
+                displayLabel: rule?.label || undefined,
+                blocks: rule?.blocks || undefined,
+                label: fields.label
+                    ? (renderTemplate(fields.label, (column) => reader.text(column)) ?? undefined)
+                    : undefined,
+                quantity: Number.isFinite(quantity) ? quantity : undefined,
+                subtitle: this.readText(record, subtitleField) ?? undefined,
+                image: this.readText(record, imageField) ?? undefined,
+                cells,
             });
         }
 
         return tasks;
+    }
+
+    /**
+     * The task list's columns, or null for the built-in name, dates and
+     * progress. "view" takes every column the view shows, in its order, less
+     * the ones the name column already shows.
+     */
+    private resolveListColumns(
+        dataset: ComponentFramework.PropertyTypes.DataSet,
+        fields: FieldSettings,
+        options: OptionSettings
+    ): ListColumn[] | null {
+        if (!options.columns) {
+            return null;
+        }
+
+        const columns = dataset.columns ?? [];
+        const findColumn = (name: string) => columns.find((column) => column.name.toLowerCase() === name.toLowerCase());
+        const builtIn = (key: string, label = "", width = 0): ListColumn => ({
+            key,
+            label: label || BUILT_IN_COLUMNS[key],
+            width: width || DEFAULT_COLUMN_WIDTHS[key],
+        });
+        const datasetColumn = (name: string, label = "", width = 0): ListColumn => {
+            const found = findColumn(name);
+            return {
+                key: name.toLowerCase(),
+                label: label || found?.displayName || name,
+                width: width || DATASET_COLUMN_WIDTH,
+            };
+        };
+
+        let resolved: ListColumn[];
+
+        if (options.columns === "view") {
+            const shownByName = new Set(
+                [fields.task.label, fields.row.label, fields.row.id].filter(Boolean).map((name) => name.toLowerCase())
+            );
+
+            resolved = [
+                builtIn("@name"),
+                ...columns
+                    .filter((column) => !column.isHidden && !shownByName.has(column.name.toLowerCase()))
+                    .slice()
+                    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                    .map((column) => datasetColumn(column.name)),
+            ];
+        } else {
+            resolved = options.columns.map((column) =>
+                column.name.startsWith("@")
+                    ? builtIn(column.name, column.label, column.width)
+                    : datasetColumn(column.name, column.label, column.width)
+            );
+        }
+
+        // The name column holds the tree and the row's selection, so there is always one.
+        if (!resolved.some((column) => column.key === "@name")) {
+            const at = resolved.length > 0 && resolved[0].key === "@group" ? 1 : 0;
+            resolved.splice(at, 0, builtIn("@name"));
+        }
+
+        return resolved;
+    }
+
+    /** Where the user's hidden columns are remembered: per table, and per set of columns on offer. */
+    private columnsStorageKey(
+        dataset: ComponentFramework.PropertyTypes.DataSet,
+        listColumns: ListColumn[] | null
+    ): string {
+        let table = "";
+
+        try {
+            table = dataset.getTargetEntityType?.() ?? "";
+        } catch {
+            table = "";
+        }
+
+        return `pcf-gantt:columns:${table}:${(listColumns ?? []).map((column) => column.key).join(",")}`;
+    }
+
+    /**
+     * Asks a model-driven host for columns the settings read but the view
+     * lacks, so a rule or column does not depend on someone editing the view.
+     * Only plain columns: a related one needs a link the view has to define.
+     * Canvas apps have no addColumn, and name the column under Fields instead.
+     */
+    private requestMissingColumns(
+        dataset: ComponentFramework.PropertyTypes.DataSet,
+        fields: FieldSettings,
+        options: OptionSettings,
+        listColumns: ListColumn[] | null
+    ): void {
+        const present = new Set((dataset.columns ?? []).map((column) => column.name.toLowerCase()));
+
+        // Columns arrive with the first page; asking before then would ask for everything.
+        if (typeof dataset.addColumn !== "function" || present.size === 0) {
+            return;
+        }
+
+        const wanted = [
+            ...ruleColumns(options.display),
+            ...templateColumns(fields.label),
+            ...(listColumns ?? []).filter((column) => !column.key.startsWith("@")).map((column) => column.key),
+        ];
+        let added = false;
+
+        for (const name of wanted) {
+            const key = name.toLowerCase();
+
+            if (name.indexOf(".") >= 0 || present.has(key) || this.requestedColumns.has(key)) {
+                continue;
+            }
+
+            this.requestedColumns.add(key);
+
+            try {
+                dataset.addColumn(name);
+                added = true;
+            } catch {
+                // A host that refuses leaves the column reported as unmatched.
+            }
+        }
+
+        if (added) {
+            try {
+                dataset.refresh();
+            } catch {
+                // The column arrives with the next load instead.
+            }
+        }
+    }
+
+    /**
+     * The values of one column across the loaded records, most common first,
+     * for the settings panel's value mapper. Blank values count under "".
+     */
+    private readonly columnValues = (column: string): { value: string; count: number }[] => {
+        const dataset = this.dataset;
+
+        if (!dataset?.sortedRecordIds || !column.trim()) {
+            return [];
+        }
+
+        const ref = this.resolveField(dataset, column.trim());
+        const counts = new Map<string, { value: string; count: number }>();
+
+        for (const recordId of dataset.sortedRecordIds) {
+            const record = dataset.records[recordId];
+
+            if (!record) {
+                continue;
+            }
+
+            const value = (this.readText(record, ref) ?? "").trim();
+            const key = normaliseText(value);
+            const entry = counts.get(key);
+
+            if (entry) {
+                entry.count += 1;
+            } else {
+                counts.set(key, { value, count: 1 });
+            }
+        }
+
+        return [...counts.values()].sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+    };
+
+    /**
+     * Values in the loaded records that the value mapper's rules leave out, per
+     * column, so a new or misspelt value is seen by the maker before a user
+     * wonders why it shows as a plain bar.
+     */
+    private findUnmappedValues(dataset: ComponentFramework.PropertyTypes.DataSet, options: OptionSettings): string[] {
+        const notes: string[] = [];
+
+        for (const column of ruleColumns(options.display)) {
+            const mapped = readValueMap(options.display, column);
+
+            // Only a column sorted into kinds, such as leave types to icons, is
+            // expected to be mapped in full; hiding one status leaves the rest as they are.
+            if (![...mapped.values()].some((mapping) => mapping.as === "icon" || mapping.as === "tint")) {
+                continue;
+            }
+
+            const unmapped = this.columnValues(column).filter(
+                (entry) => entry.value !== "" && !mapped.has(normaliseText(entry.value))
+            );
+
+            if (unmapped.length === 0) {
+                continue;
+            }
+
+            const named = unmapped
+                .slice(0, NOTED_VALUES)
+                .map((entry) => `"${entry.value}"`)
+                .join(", ");
+            const more = unmapped.length > NOTED_VALUES ? ` and ${unmapped.length - NOTED_VALUES} more` : "";
+
+            notes.push(
+                `${unmapped.length === 1 ? "1 value" : `${unmapped.length} values`} in ${column} ${
+                    unmapped.length === 1 ? "is" : "are"
+                } not mapped and show as bars: ${named}${more}`
+            );
+        }
+
+        return notes;
     }
 
     private addToRow(rowId: string, recordId: string): void {
@@ -503,8 +824,10 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
     private findUnmatchedFields(
         dataset: ComponentFramework.PropertyTypes.DataSet,
         fields: FieldSettings,
-        groupRows: boolean
+        options: OptionSettings,
+        listColumns: ListColumn[] | null
     ): { setting: string; field: string }[] {
+        const { groupRows } = options;
         const columns = new Set((dataset.columns ?? []).map((column) => column.name.toLowerCase()));
 
         // Columns arrive with the first page; judging before then flags everything.
@@ -534,6 +857,15 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             ["category", fields.category, ""],
             ["color", fields.color, ""],
             ["locked", fields.locked, ""],
+            ...templateColumns(fields.label).map((name): [string, string, string] => ["label", name, ""]),
+            ["quantity", fields.quantity, ""],
+            ["subtitle", fields.subtitle, ""],
+            ["image", fields.image, ""],
+            ["icon", fields.icon, ""],
+            ...ruleColumns(options.display).map((name): [string, string, string] => ["display", name, ""]),
+            ...(listColumns ?? [])
+                .filter((column) => !column.key.startsWith("@"))
+                .map((column): [string, string, string] => ["columns", column.key, ""]),
         ];
         const unmatched: { setting: string; field: string }[] = [];
 

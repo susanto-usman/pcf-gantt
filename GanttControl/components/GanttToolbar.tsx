@@ -1,6 +1,7 @@
 import {
     Input,
     Menu,
+    MenuItemCheckbox,
     MenuItemRadio,
     MenuList,
     MenuPopover,
@@ -18,6 +19,7 @@ import { Density, TimeScale } from "../types";
 import {
     CalendarTodayIcon,
     ChevronDownIcon,
+    ColumnsIcon,
     ChevronUpIcon,
     DensityIcon,
     FitToWidthIcon,
@@ -39,6 +41,13 @@ export interface FilterChip {
     color?: string;
 }
 
+/** A task list column the user may show or hide. */
+export interface ColumnChoice {
+    key: string;
+    label: string;
+    visible: boolean;
+}
+
 export interface GanttToolbarProps {
     density: Density;
     timeScale: TimeScale;
@@ -54,6 +63,9 @@ export interface GanttToolbarProps {
     onToggleAll: () => void;
     onScrollToToday: () => void;
     onFitToWidth: () => void;
+    /** Columns the user may show or hide; the menu is left out when there are none. */
+    columns: ColumnChoice[];
+    onToggleColumn: (key: string) => void;
     /** Opens the maker's settings panel; the button is left out when undefined. */
     onOpenSettings?: () => void;
 }
@@ -73,6 +85,8 @@ export const GanttToolbar: React.FC<GanttToolbarProps> = ({
     onToggleAll,
     onScrollToToday,
     onFitToWidth,
+    columns,
+    onToggleColumn,
     onOpenSettings,
 }) => {
     const styles = useGanttStyles();
@@ -201,6 +215,38 @@ export const GanttToolbar: React.FC<GanttToolbarProps> = ({
                 </Tooltip>
 
                 <ToolbarDivider />
+
+                {columns.length > 0 && (
+                    <Menu
+                        checkedValues={{
+                            columns: columns.filter((column) => column.visible).map((column) => column.key),
+                        }}
+                        onCheckedValueChange={(_, data) => {
+                            const shown = new Set(data.checkedItems);
+                            // One click changes one column; find it and hand it over.
+                            const changed = columns.find((column) => column.visible !== shown.has(column.key));
+
+                            if (changed) {
+                                onToggleColumn(changed.key);
+                            }
+                        }}
+                    >
+                        <MenuTrigger disableButtonEnhancement>
+                            <Tooltip content="Show or hide columns" relationship="label">
+                                <ToolbarButton appearance="subtle" icon={<ColumnsIcon />} />
+                            </Tooltip>
+                        </MenuTrigger>
+                        <MenuPopover>
+                            <MenuList>
+                                {columns.map((column) => (
+                                    <MenuItemCheckbox key={column.key} name="columns" value={column.key}>
+                                        {column.label}
+                                    </MenuItemCheckbox>
+                                ))}
+                            </MenuList>
+                        </MenuPopover>
+                    </Menu>
+                )}
 
                 <Menu
                     checkedValues={{ density: [density] }}

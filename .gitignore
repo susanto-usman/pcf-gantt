@@ -21,3 +21,7 @@
 
 # macos
 .DS_Store
+
+# generated sample data (run sample-data/generate-roster.mjs)
+/sample-data/*.csv
+/sample-data/*.json

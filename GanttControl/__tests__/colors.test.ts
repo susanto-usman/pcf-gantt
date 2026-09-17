@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { buildColorScheme, parseLegend, STATUS_LABELS, STATUS_TOKENS } from "../colors";
+import {
+    buildColorScheme,
+    parseLegend,
+    readLegendEntries,
+    STATUS_LABELS,
+    STATUS_TOKENS,
+    toHex,
+    writeLegend,
+} from "../colors";
 
 /** Only the colour key matters to the scheme, so tasks are stubbed down to it. */
 const coloured = (...keys: (string | null)[]) => keys.map((colorKey) => ({ colorKey }));
@@ -170,5 +178,49 @@ describe("buildColorScheme, by field", () => {
 
         expect(scheme.mode).toBe("status");
         expect(scheme.paletteFor(null, "atRisk")).toEqual(STATUS_TOKENS.atRisk);
+    });
+});
+
+describe("legend entries", () => {
+    it("reads shorthand and JSON alike, keeping a colour still being typed", () => {
+        expect(readLegendEntries("Day=#0F6CBD; Night=#5C")).toEqual([
+            { value: "Day", label: "Day", color: "#0F6CBD" },
+            { value: "Night", label: "Night", color: "#5C" },
+        ]);
+        expect(readLegendEntries('{"Leave":{"color":"#D13438","label":"On leave"}}')).toEqual([
+            { value: "Leave", label: "On leave", color: "#D13438" },
+        ]);
+    });
+
+    it("writes shorthand while it can, and drops entries with no colour", () => {
+        expect(
+            writeLegend([
+                { value: "Day", label: "", color: "#0F6CBD" },
+                { value: "Night", label: "Night", color: "" },
+                { value: "*", label: "", color: "#8A8886" },
+            ])
+        ).toBe("Day=#0F6CBD; *=#8A8886");
+    });
+
+    it("writes JSON once a label differs or a value holds a separator", () => {
+        const written = writeLegend([
+            { value: "Day", label: "Day shift", color: "#0F6CBD" },
+            { value: "A=B", label: "", color: "red" },
+        ]);
+
+        expect(JSON.parse(written)).toEqual([
+            { value: "Day", label: "Day shift", color: "#0F6CBD" },
+            { value: "A=B", color: "red" },
+        ]);
+        expect(parseLegend(written).map((item) => item.label)).toEqual(["Day shift", "A=B"]);
+    });
+});
+
+describe("toHex", () => {
+    it("gives a picker the six-digit hex of a hex or rgb colour, and nothing for the rest", () => {
+        expect(toHex("#0f6cbd")).toBe("#0F6CBD");
+        expect(toHex("#abc")).toBe("#AABBCC");
+        expect(toHex("rgb(209, 52, 56)")).toBe("#D13438");
+        expect(toHex("teal")).toBeNull();
     });
 });

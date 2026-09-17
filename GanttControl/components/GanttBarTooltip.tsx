@@ -23,6 +23,11 @@ export interface GanttBarTooltipContentProps {
     showProgress: boolean;
     isSummary: boolean;
     showLock: boolean;
+    /**
+     * Records on the same row this one clashes with: for unavailable time, the
+     * bookings made over it; for a booking, the unavailable time it runs into.
+     */
+    clashes?: readonly GanttTask[];
 }
 
 export const GanttBarTooltipContent: React.FC<GanttBarTooltipContentProps> = ({
@@ -34,6 +39,7 @@ export const GanttBarTooltipContent: React.FC<GanttBarTooltipContentProps> = ({
     showProgress,
     isSummary,
     showLock,
+    clashes,
 }) => {
     const styles = useGanttStyles();
 
@@ -80,6 +86,19 @@ export const GanttBarTooltipContent: React.FC<GanttBarTooltipContentProps> = ({
                         <span>{`${progress}%`}</span>
                     </div>
                 </>
+            )}
+            {clashes && clashes.length > 0 && (
+                <div className={styles.tooltipClashes}>
+                    <span className={styles.tooltipClashTitle}>
+                        {task.blocks ? "Booked during this time" : "Clashes with unavailable time"}
+                    </span>
+                    {clashes.map((other) => (
+                        <div key={other.id} className={styles.tooltipRow}>
+                            <span>{other.displayLabel || other.label || other.title}</span>
+                            <span className={styles.tooltipLabel}>{formatRange(other.start, other.end)}</span>
+                        </div>
+                    ))}
+                </div>
             )}
         </div>
     );
@@ -139,6 +158,13 @@ export function useCursorTooltip(): {
     };
 
     return { positioning, onPointerMove };
+}
+
+/** A short "20 Apr – 24 Apr", or a single date when both ends fall on it. */
+function formatRange(start: Date, end: Date): string {
+    const startText = formatDateTime(start);
+    const endText = formatDateTime(end);
+    return startText === endText ? startText : `${startText} – ${endText}`;
 }
 
 /** Whole days for a date-only task, elapsed time once either end carries one. */

@@ -1,4 +1,5 @@
-import { ColorMode, Density, TimeScale } from "./types";
+import { DisplayRule, parseDisplayRules, serializeDisplayRules, unwrapValue } from "./display";
+import { BarStyle, ColorMode, Density, TimeScale } from "./types";
 
 /**
  * The two JSON settings that configure the control: `fields`, which columns
@@ -29,7 +30,37 @@ export interface FieldSettings {
     category: string;
     color: string;
     locked: string;
+    /** Text on each bar: a column name, or a template such as "{role} · {job}". */
+    label: string;
+    /** How many a record stands for, shown as a badge on its bar. */
+    quantity: string;
+    /** A second line under each row title. */
+    subtitle: string;
+    /** An image for each row's avatar. */
+    image: string;
+    /** The icon an icon record shows, when the record names its own. */
+    icon: string;
 }
+
+/**
+ * One column of the task list: a built-in (@name, @group, @start, @end,
+ * @progress) or a dataset column. A blank label takes the column's display
+ * name, and a width of 0 a width the chart picks.
+ */
+export interface ColumnSetting {
+    name: string;
+    label: string;
+    width: number;
+}
+
+/** The built-in task list columns, and what each is headed by default. */
+export const BUILT_IN_COLUMNS: Record<string, string> = {
+    "@name": "Task",
+    "@group": "Group",
+    "@start": "Start",
+    "@end": "Finish",
+    "@progress": "Progress",
+};
 
 export interface OptionSettings {
     density: Density;
@@ -46,6 +77,17 @@ export interface OptionSettings {
     allowResize: boolean;
     /** Shows the settings button, for a maker tuning the chart. Off for end users. */
     showSettings: boolean;
+    showAvatars: boolean;
+    barStyle: BarStyle;
+    /**
+     * The task list's columns: blank for the built-in name, dates and progress,
+     * "view" for the name followed by every column in the view, or a list.
+     */
+    columns: "" | "view" | ColumnSetting[];
+    /** How records are drawn, matched against their own columns. See display.ts. */
+    display: DisplayRule[];
+    /** Heading for the records display rules send to the unallocated pool. */
+    poolTitle: string;
 }
 
 export interface Parsed<T> {
@@ -65,6 +107,11 @@ export const DEFAULT_FIELDS: FieldSettings = {
     category: "",
     color: "",
     locked: "",
+    label: "",
+    quantity: "",
+    subtitle: "",
+    image: "",
+    icon: "",
 };
 
 export const DEFAULT_OPTIONS: OptionSettings = {
@@ -80,10 +127,28 @@ export const DEFAULT_OPTIONS: OptionSettings = {
     allowMove: false,
     allowResize: false,
     showSettings: false,
+    showAvatars: false,
+    barStyle: "filled",
+    columns: "",
+    display: [],
+    poolTitle: "Unallocated",
 };
 
 const KEYED_FIELDS = ["task", "group", "row"] as const;
-const PLAIN_FIELDS = ["start", "end", "progress", "parent", "category", "color", "locked"] as const;
+const PLAIN_FIELDS = [
+    "start",
+    "end",
+    "progress",
+    "parent",
+    "category",
+    "color",
+    "locked",
+    "label",
+    "quantity",
+    "subtitle",
+    "image",
+    "icon",
+] as const;
 const BOOLEAN_OPTIONS = [
     "showToolbar",
     "showCurrentTime",
@@ -93,16 +158,19 @@ const BOOLEAN_OPTIONS = [
     "allowMove",
     "allowResize",
     "showSettings",
+    "showAvatars",
 ] as const;
 
 /** British spellings, since the control's own labels use them. */
 const ALIASES: Record<string, string> = { colour: "color", colourby: "colorby" };
 
+type Bag = Map<string, { name: string; value: unknown }>;
+
 /**
  * The object a setting holds, keyed by lower-cased name. Null for a blank
  * setting; a problem for anything that is not a JSON object.
  */
-function readObject(text: string | null | undefined, setting: string, problems: string[]) {
+function readObject(text: string | null | undefined, setting: string, problems: string[]): Bag | null {
     const trimmed = (text ?? "").trim();
 
     if (trimmed.length === 0) {
@@ -123,7 +191,7 @@ function readObject(text: string | null | undefined, setting: string, problems: 
         return null;
     }
 
-    const bag = new Map<string, { name: string; value: unknown }>();
+    const bag: Bag = new Map();
 
     for (const [name, value] of Object.entries(parsed as Record<string, unknown>)) {
         const key = name.toLowerCase();
@@ -133,18 +201,13 @@ function readObject(text: string | null | undefined, setting: string, problems: 
     return bag;
 }
 
-function take(bag: Map<string, { name: string; value: unknown }>, key: string) {
+function take(bag: Bag, key: string) {
     const entry = bag.get(key.toLowerCase());
     bag.delete(key.toLowerCase());
     return entry;
 }
 
-function reportUnknown(
-    bag: Map<string, { name: string; value: unknown }>,
-    setting: string,
-    known: readonly string[],
-    problems: string[]
-) {
+function reportUnknown(bag: Bag, setting: string, known: readonly string[], problems: string[]) {
     for (const { name } of bag.values()) {
         problems.push(`${setting}: "${name}" is not a setting. Use ${known.join(", ")}`);
     }
@@ -194,7 +257,7 @@ export function parseFields(text: string | null | undefined): Parsed<FieldSettin
         const where = `Field mapping: ${entry.name}`;
 
         if (entry.value !== null && typeof entry.value === "object" && !Array.isArray(entry.value)) {
-            const pair = new Map(
+            const pair: Bag = new Map(
                 Object.entries(entry.value as Record<string, unknown>).map(([name, v]) => [
                     name.toLowerCase(),
                     { name, value: v },
@@ -283,6 +346,82 @@ function flag(entry: { name: string; value: unknown } | undefined, fallback: boo
     return fallback;
 }
 
+function parseColumns(
+    entry: { name: string; value: unknown } | undefined,
+    problems: string[]
+): OptionSettings["columns"] {
+    if (!entry || entry.value === null || entry.value === undefined || entry.value === "") {
+        return "";
+    }
+
+    if (typeof entry.value === "string") {
+        if (entry.value.trim().toLowerCase() === "view") {
+            return "view";
+        }
+
+        problems.push(`Options: ${entry.name} must be "view" or a list of columns`);
+        return "";
+    }
+
+    if (!Array.isArray(entry.value)) {
+        problems.push(`Options: ${entry.name} must be "view" or a list of columns`);
+        return "";
+    }
+
+    const columns: ColumnSetting[] = [];
+
+    entry.value.forEach((raw: unknown, index) => {
+        const item = unwrapValue(raw);
+        const where = `Options: ${entry.name}[${index + 1}]`;
+        let column: ColumnSetting | null = null;
+
+        if (typeof item === "string") {
+            column = { name: item.trim(), label: "", width: 0 };
+        } else if (item !== null && typeof item === "object" && !Array.isArray(item)) {
+            const bag = new Map(Object.entries(item as Record<string, unknown>).map(([k, v]) => [k.toLowerCase(), v]));
+            const name = bag.get("name");
+            const label = bag.get("label");
+            const width = bag.get("width");
+
+            if (typeof name !== "string" || !name.trim()) {
+                problems.push(`${where} needs a name`);
+                return;
+            }
+
+            if (width !== undefined && width !== null && (typeof width !== "number" || width < 0)) {
+                problems.push(`${where}.width must be a number of pixels`);
+                return;
+            }
+
+            column = {
+                name: name.trim(),
+                label: typeof label === "string" ? label.trim() : "",
+                width: typeof width === "number" ? Math.round(width) : 0,
+            };
+        }
+
+        if (!column || !column.name) {
+            problems.push(`${where} must be a column name or {"name": ..., "label": ..., "width": ...}`);
+            return;
+        }
+
+        if (column.name.startsWith("@")) {
+            const builtIn = column.name.toLowerCase();
+
+            if (!(builtIn in BUILT_IN_COLUMNS)) {
+                problems.push(`${where}: ${column.name} is not one of ${Object.keys(BUILT_IN_COLUMNS).join(", ")}`);
+                return;
+            }
+
+            column.name = builtIn;
+        }
+
+        columns.push(column);
+    });
+
+    return columns;
+}
+
 /**
  * How the chart looks and behaves. The legend is taken as the shorthand text
  * or as JSON written straight into the options.
@@ -314,6 +453,12 @@ export function parseOptions(text: string | null | undefined): Parsed<OptionSett
         DEFAULT_OPTIONS.colorBy,
         problems
     );
+    value.barStyle = choice(
+        take(bag, "barStyle"),
+        { filled: "filled", outlined: "outlined" },
+        DEFAULT_OPTIONS.barStyle,
+        problems
+    );
 
     const legend = take(bag, "legend");
 
@@ -325,7 +470,20 @@ export function parseOptions(text: string | null | undefined): Parsed<OptionSett
         value[key] = flag(take(bag, key), DEFAULT_OPTIONS[key], problems);
     }
 
-    reportUnknown(bag, "Options", ["density", "timeScale", "colorBy", "legend", ...BOOLEAN_OPTIONS], problems);
+    value.columns = parseColumns(take(bag, "columns"), problems);
+    value.display = parseDisplayRules(take(bag, "display")?.value, problems);
+
+    const poolTitle = take(bag, "poolTitle");
+
+    if (poolTitle && poolTitle.value !== null && poolTitle.value !== undefined) {
+        if (typeof poolTitle.value === "string") {
+            value.poolTitle = poolTitle.value.trim() || DEFAULT_OPTIONS.poolTitle;
+        } else {
+            problems.push(`Options: ${poolTitle.name} must be text`);
+        }
+    }
+
+    reportUnknown(bag, "Options", Object.keys(DEFAULT_OPTIONS), problems);
 
     return { value, problems };
 }
@@ -353,28 +511,65 @@ export function serializeFields(fields: FieldSettings): string {
             category: fields.category,
             color: fields.color,
             locked: fields.locked,
+            label: fields.label,
+            quantity: fields.quantity,
+            subtitle: fields.subtitle,
+            image: fields.image,
+            icon: fields.icon,
         },
         null,
         4
     );
 }
 
-/** The options as indented JSON, every key present. */
+/** The options as indented JSON, every key present. Columns are written as bare names where that says it all. */
 export function serializeOptions(options: OptionSettings): string {
-    return JSON.stringify({ ...options }, null, 4);
+    return JSON.stringify(
+        {
+            ...options,
+            // A row the panel has added but not yet named is left out until it is.
+            columns: Array.isArray(options.columns)
+                ? options.columns
+                      .filter((column) => column.name.trim())
+                      .map((column) =>
+                          column.label || column.width
+                              ? {
+                                    name: column.name,
+                                    ...(column.label ? { label: column.label } : {}),
+                                    ...(column.width ? { width: column.width } : {}),
+                                }
+                              : column.name
+                      )
+                : options.columns,
+            display: serializeDisplayRules(options.display),
+        },
+        null,
+        4
+    );
+}
+
+/** A record key as Power Fx takes it: bare when it is a plain name, in single quotes otherwise. */
+function powerFxName(name: string): string {
+    return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? name : `'${name.replace(/'/g, "''")}'`;
 }
 
 /**
  * The same JSON as a canvas formula: JSON({ ... }) builds the text from a
- * record, so nothing needs its quotes doubled. Keys are plain identifiers, so
- * they are written bare.
+ * record, so nothing needs its quotes doubled. A list is written as a table,
+ * which JSON() writes back out as a list.
  */
 export function toPowerFx(json: string): string {
     const write = (value: unknown, indent: string): string => {
-        if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-            const inner = `${indent}    `;
+        const inner = `${indent}    `;
+
+        if (Array.isArray(value)) {
+            const items = value.map((item) => `${inner}${write(item, inner)}`);
+            return items.length === 0 ? "[]" : `[\n${items.join(",\n")}\n${indent}]`;
+        }
+
+        if (value !== null && typeof value === "object") {
             const entries = Object.entries(value as Record<string, unknown>).map(
-                ([key, item]) => `${inner}${key}: ${write(item, inner)}`
+                ([key, item]) => `${inner}${powerFxName(key)}: ${write(item, inner)}`
             );
             return entries.length === 0 ? "{}" : `{\n${entries.join(",\n")}\n${indent}}`;
         }

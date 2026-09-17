@@ -10,12 +10,12 @@ export interface GanttControlViewProps {
     options: string;
     /** Column names in the dataset, for the settings panel to offer. */
     columns: string[];
+    /** The values a column holds across the loaded records, for the value mapper. */
+    valuesOf: (column: string) => { value: string; count: number }[];
     /** The chart's props for a pair of settings, read against the latest data. */
     build: (fields: string, options: string) => GanttChartProps;
     /** Changes on every updateView, since the data can move while the settings hold still. */
     version: number;
-    /** Publishes the settings through the control's outputs, for the app to store. */
-    onApply: (fields: string, options: string) => void;
 }
 
 /** A draft the maker is trying out; either half left undefined shows the saved setting. */
@@ -26,17 +26,17 @@ interface Draft {
 
 /**
  * The chart plus the maker's settings panel. The panel's draft is drawn in
- * place of the saved settings until it reaches the properties — pasted in, or
- * applied and fed back by the app — at which point the saved text changes and
- * the draft is let go, or until the maker discards it.
+ * place of the saved settings until it is pasted into the properties, at
+ * which point the saved text changes and the draft is let go, or until the
+ * maker discards it.
  */
 export const GanttControlView: React.FC<GanttControlViewProps> = ({
     fields,
     options,
     columns,
+    valuesOf,
     build,
     version,
-    onApply,
 }) => {
     const [draft, setDraft] = React.useState<Draft>({});
     const [isOpen, setIsOpen] = React.useState(false);
@@ -89,8 +89,8 @@ export const GanttControlView: React.FC<GanttControlViewProps> = ({
                 fields={activeFields}
                 options={activeOptions}
                 columns={columns}
+                valuesOf={valuesOf}
                 onChange={handleChange}
-                onApply={onApply}
                 onClose={handleClose}
             />
         </>

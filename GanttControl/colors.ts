@@ -74,7 +74,7 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
 };
 
 /** Legend order for the time-based scheme, worst news last but for "not started". */
-const STATUS_ORDER: TaskStatus[] = ["onTrack", "atRisk", "overdue", "complete", "notStarted"];
+export const STATUS_ORDER: TaskStatus[] = ["onTrack", "atRisk", "overdue", "complete", "notStarted"];
 
 /**
  * Handed out in turn to distinct values when the maker colours by a field
@@ -131,12 +131,16 @@ const STATUS_ALIASES = new Map<string, TaskStatus>(
 );
 
 /** The status a legend entry recolours, or null when it names something else. */
-function statusOf(key: string): TaskStatus | null {
+export function statusOf(key: string): TaskStatus | null {
     return STATUS_ALIASES.get(squash(key)) ?? null;
 }
 
 /** Values a maker writes to mean "everything the entries above did not match". */
 const CATCH_ALL = new Set(["*", "", "default", "other", "rest"]);
+
+export function isCatchAll(value: string): boolean {
+    return CATCH_ALL.has(normaliseKey(value));
+}
 
 /**
  * CSS colours we are willing to write into a style attribute: hex, a functional
@@ -147,7 +151,7 @@ const COLOR_PATTERN = /^(#[0-9a-f]{3,8}|(?:rgb|hsl|hwb|lab|lch|oklab|oklch)a?\([
 
 const RGB_PATTERN = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i;
 
-function readColor(value: unknown): string | null {
+export function readColor(value: unknown): string | null {
     if (typeof value !== "string") {
         return null;
     }
@@ -179,6 +183,17 @@ function toRgb(color: string): [number, number, number] | null {
     return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
 }
 
+/** A hex or rgb() colour as #RRGGBB, which a colour picker takes; null for anything else. */
+export function toHex(color: string): string | null {
+    const rgb = toRgb(color.trim());
+    return rgb
+        ? `#${rgb
+              .map((channel) => channel.toString(16).padStart(2, "0"))
+              .join("")
+              .toUpperCase()}`
+        : null;
+}
+
 /**
  * A maker gives one colour per legend entry, but a bar needs a track behind its
  * progress fill as well. It is the same colour at low alpha, which sits
@@ -186,9 +201,29 @@ function toRgb(color: string): [number, number, number] | null {
  * keyword, or a notation the browser knows and we do not — goes on the track
  * as-is, which costs the progress fill its contrast but never the bar's colour.
  */
-function paletteFromColor(color: string): BarPalette {
+export function paletteFromColor(color: string): BarPalette {
     const rgb = toRgb(color);
     return { fill: color, track: rgb ? `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.28)` : color, text: color };
+}
+
+/**
+ * Text that reads on a solid fill: dark on a light colour, white on a dark one.
+ * A colour we cannot take apart, such as a theme token, is assumed dark, as
+ * every status fill is.
+ */
+export function textOnFill(color: string): string {
+    const rgb = toRgb(color);
+
+    if (!rgb) {
+        return "#FFFFFF";
+    }
+
+    const [red, green, blue] = rgb.map((channel) => {
+        const unit = channel / 255;
+        return unit <= 0.03928 ? unit / 12.92 : Math.pow((unit + 0.055) / 1.055, 2.4);
+    });
+
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue > 0.4 ? "#242424" : "#FFFFFF";
 }
 
 /** A legend entry as authored, before its colour is checked. */
@@ -266,6 +301,59 @@ function fromShorthand(text: string): RawEntry[] {
 
         return value.length > 0 && color.length > 0 ? [{ value, label: value, color }] : [];
     });
+}
+
+/** A legend entry as the settings panel edits it: the colour kept as typed, valid or not. */
+export interface LegendEntry {
+    value: string;
+    label: string;
+    color: string;
+}
+
+/** The authored legend entry by entry, in order, for the settings panel to edit. */
+export function readLegendEntries(text: string | null | undefined): LegendEntry[] {
+    const trimmed = (text ?? "").trim();
+
+    if (trimmed.length === 0) {
+        return [];
+    }
+
+    const raw = trimmed.startsWith("[") || trimmed.startsWith("{") ? fromJson(trimmed) : fromShorthand(trimmed);
+
+    return raw.flatMap((entry) =>
+        typeof entry.color === "string" ? [{ value: entry.value, label: entry.label, color: entry.color }] : []
+    );
+}
+
+/**
+ * The legend as the panel writes it back: shorthand while that can say it all,
+ * JSON once a label differs from its value or a value holds a separator.
+ * Entries with no colour are left out, as parseLegend would drop them anyway.
+ */
+export function writeLegend(entries: LegendEntry[]): string {
+    const kept = entries
+        .map((entry) => ({
+            value: entry.value.trim(),
+            label: entry.label.trim() || entry.value.trim(),
+            color: entry.color.trim(),
+        }))
+        .filter((entry) => entry.color.length > 0);
+
+    const isPlain = kept.every(
+        (entry) => entry.label === entry.value && !/[;=:\n]/.test(entry.value) && !/^[[{]/.test(entry.value)
+    );
+
+    if (isPlain) {
+        return kept.map((entry) => `${entry.value}=${entry.color}`).join("; ");
+    }
+
+    return JSON.stringify(
+        kept.map((entry) =>
+            entry.label === entry.value
+                ? { value: entry.value, color: entry.color }
+                : { value: entry.value, label: entry.label, color: entry.color }
+        )
+    );
 }
 
 /**

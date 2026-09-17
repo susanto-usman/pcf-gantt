@@ -128,6 +128,67 @@ export const GROUP_ROW_PREFIX = "group:";
 /** The heading for records with no group value, once any record has one. */
 const NO_GROUP_TITLE = "(No value)";
 
+/** Row keys of the lanes the unallocated pool is packed into. */
+export const POOL_ROW_PREFIX = "pool:";
+
+/** The unallocated pool's heading, which always leads the chart. */
+export const POOL_GROUP_ID = `${GROUP_ROW_PREFIX}@pool`;
+
+export const DEFAULT_POOL_TITLE = "Unallocated";
+
+/** An icon or a tint: drawn in the days it covers rather than as a bar. */
+export function isMarker(task: GanttTask): boolean {
+    return task.kind === "icon" || task.kind === "tint";
+}
+
+/**
+ * Packs the pool's records into as few lanes as will hold them without
+ * overlapping, earliest start first, so a pool of hundreds of shifts reads as a
+ * handful of rows rather than one row each.
+ */
+export function assignPoolLanes(tasks: GanttTask[]): GanttTask[] {
+    const pool = tasks.filter((task) => task.kind === "pool");
+
+    if (pool.length === 0) {
+        return tasks;
+    }
+
+    const laneOf = new Map<string, number>();
+    const laneEnds: number[] = [];
+
+    for (const task of pool.slice().sort((a, b) => a.start.getTime() - b.start.getTime())) {
+        const start = task.start.getTime();
+        let lane = laneEnds.findIndex((end) => end <= start);
+
+        if (lane < 0) {
+            lane = laneEnds.length;
+            laneEnds.push(0);
+        }
+
+        laneEnds[lane] = exclusiveEnd(task.end).getTime();
+        laneOf.set(task.id, lane);
+    }
+
+    return tasks.map((task) =>
+        task.kind === "pool"
+            ? {
+                  ...task,
+                  rowKey: `${POOL_ROW_PREFIX}${laneOf.get(task.id) ?? 0}`,
+                  rowTitle: null,
+                  parentId: null,
+                  groupKey: null,
+                  groupTitle: null,
+              }
+            : task
+    );
+}
+
+/** The value every one of the tasks shares, or null where they differ or none has one. */
+function sharedValue<T>(values: (T | null | undefined)[]): T | null {
+    const present = values.filter((value): value is T => value !== null && value !== undefined && value !== "");
+    return present.length > 0 && present.every((value) => value === present[0]) ? present[0] : null;
+}
+
 interface RowUnits {
     /** One task per row: plain tasks as-is, plus a synthesised task per row key. */
     units: GanttTask[];
@@ -178,16 +239,28 @@ function buildRowUnits(tasks: GanttTask[]): RowUnits {
         const segments = (grouped.get(first.rowKey) ?? [first])
             .slice()
             .sort((a, b) => a.start.getTime() - b.start.getTime());
-        let start = segments[0].start;
-        let end = segments[0].end;
+        // Leave and availability say nothing about the work on a row, so the
+        // row's span and progress come from its bars whenever it has any.
+        const bars = segments.filter((segment) => !isMarker(segment));
+        const measured = bars.length > 0 ? bars : segments;
+        let start = measured[0].start;
+        let end = measured[0].end;
         let weight = 0;
         let weightedProgress = 0;
 
-        for (const segment of segments) {
+        for (const segment of measured) {
             start = segment.start < start ? segment.start : start;
             end = segment.end > end ? segment.end : end;
             weight += durationInDays(segment);
             weightedProgress += segment.progress * durationInDays(segment);
+        }
+
+        const isPoolLane = first.rowKey.startsWith(POOL_ROW_PREFIX);
+        const cellKeys = new Set(segments.flatMap((segment) => Object.keys(segment.cells ?? {})));
+        const cells: Record<string, string> = {};
+
+        for (const key of cellKeys) {
+            cells[key] = sharedValue(segments.map((segment) => segment.cells?.[key])) ?? "";
         }
 
         // A merged row only speaks for a value its every segment shares; where
@@ -197,7 +270,8 @@ function buildRowUnits(tasks: GanttTask[]): RowUnits {
         const colorKeys = new Set(segments.map((segment) => segment.colorKey));
         const merged: GanttTask = {
             id: `${MERGED_ROW_PREFIX}${first.rowKey}`,
-            title: segments.find((segment) => segment.rowTitle)?.rowTitle ?? first.rowKey,
+            // A pool lane is only a place to put bars, so it has no name to show.
+            title: isPoolLane ? "" : (segments.find((segment) => segment.rowTitle)?.rowTitle ?? first.rowKey),
             start,
             end,
             progress: weight > 0 ? Math.round(weightedProgress / weight) : 0,
@@ -211,6 +285,10 @@ function buildRowUnits(tasks: GanttTask[]): RowUnits {
             // The synthesised task is never drawn as a bar, so this only speaks
             // for the row as a whole: locked once every record on it is.
             isLocked: segments.every((segment) => segment.isLocked),
+            // A pool lane stands for no one, so it takes no one's subtitle or picture.
+            subtitle: isPoolLane ? undefined : (segments.find((segment) => segment.subtitle)?.subtitle ?? undefined),
+            image: isPoolLane ? undefined : (segments.find((segment) => segment.image)?.image ?? undefined),
+            cells: cellKeys.size > 0 ? cells : undefined,
         };
 
         units[index] = merged;
@@ -344,8 +422,8 @@ interface Hierarchy extends RowUnits {
  * in the order the values first appear, with the valueless ones last. A task
  * with a parent stays under its parent, whichever group it names itself.
  */
-function buildHierarchy(tasks: GanttTask[]): Hierarchy {
-    const rowUnits = buildRowUnits(tasks);
+function buildHierarchy(tasks: GanttTask[], poolTitle: string = DEFAULT_POOL_TITLE): Hierarchy {
+    const rowUnits = buildRowUnits(assignPoolLanes(tasks));
     const { units, weightOf } = rowUnits;
     const parents = resolveParents(units);
     const childrenOf = new Map<string, GanttTask[]>();
@@ -360,20 +438,52 @@ function buildHierarchy(tasks: GanttTask[]): Hierarchy {
         }
     };
 
+    const groupIds = new Set<string>();
+    const poolLanes: GanttTask[] = [];
+
     for (const task of units) {
         const parentId = parents.get(task.id) ?? null;
 
-        if (parentId === null) {
+        if (isPoolLane(task)) {
+            poolLanes.push(task);
+        } else if (parentId === null) {
             topLevel.push(task);
         } else {
             addChild(parentId, task);
         }
     }
 
-    const groupIds = new Set<string>();
+    // The pool leads the chart under a heading of its own, whatever the rest is grouped by.
+    const poolHeadings: GanttTask[] = [];
 
+    if (poolLanes.length > 0) {
+        const heading: GanttTask = {
+            id: POOL_GROUP_ID,
+            title: poolTitle,
+            start: poolLanes[0].start,
+            end: poolLanes[0].end,
+            progress: 0,
+            parentId: null,
+            category: null,
+            colorKey: null,
+            rowKey: null,
+            rowTitle: null,
+            groupKey: POOL_GROUP_ID.slice(GROUP_ROW_PREFIX.length),
+            groupTitle: null,
+            isLocked: true,
+        };
+
+        poolLanes.sort((a, b) => (a.rowKey ?? "").localeCompare(b.rowKey ?? "", undefined, { numeric: true }));
+        poolHeadings.push(heading);
+        groupIds.add(heading.id);
+        weightOf.set(heading.id, 0);
+        rowUnits.segmentsOf.set(heading.id, []);
+        childrenOf.set(heading.id, poolLanes);
+    }
+
+    // Pool lanes carry no group value, so they never call for headings of their own.
     if (!units.some((task) => task.groupKey)) {
-        return { ...rowUnits, roots: topLevel, childrenOf, groupIds };
+        return { ...rowUnits, roots: [...poolHeadings, ...topLevel], childrenOf, groupIds };
     }
 
     const headings = new Map<string, GanttTask>();
@@ -415,7 +525,11 @@ function buildHierarchy(tasks: GanttTask[]): Hierarchy {
     // Valueless records go last, so the named groups lead.
     const roots = [...headings.values()].sort((a, b) => Number(a.groupKey === "") - Number(b.groupKey === ""));
 
-    return { ...rowUnits, roots, childrenOf, groupIds };
+    return { ...rowUnits, roots: [...poolHeadings, ...roots], childrenOf, groupIds };
+}
+
+function isPoolLane(task: GanttTask): boolean {
+    return task.rowKey?.startsWith(POOL_ROW_PREFIX) ?? false;
 }
 
 /**
@@ -437,37 +551,48 @@ export function collectParentIds(tasks: GanttTask[]): string[] {
  * follow their parent, collapsed subtrees are omitted, and each parent carries
  * the rolled-up span and progress of its descendants.
  */
-export function buildRows(tasks: GanttTask[], collapsedIds: ReadonlySet<string>): GanttRow[] {
+export function buildRows(
+    tasks: GanttTask[],
+    collapsedIds: ReadonlySet<string>,
+    poolTitle: string = DEFAULT_POOL_TITLE
+): GanttRow[] {
     if (tasks.length === 0) {
         return [];
     }
 
-    const { units, segmentsOf, weightOf, roots, childrenOf, groupIds } = buildHierarchy(tasks);
+    const { units, segmentsOf, weightOf, roots, childrenOf, groupIds } = buildHierarchy(tasks, poolTitle);
 
     // A cycle in the parent references would leave tasks unreachable from any
     // root, so promote whatever the walk below never visits.
     const rows: GanttRow[] = [];
     const visited = new Set<string>();
 
-    const walk = (task: GanttTask, depth: number): { start: Date; end: Date; weight: number; progress: number } => {
+    const walk = (
+        task: GanttTask,
+        depth: number,
+        parentGroup: GanttRow["group"]
+    ): { start: Date; end: Date; weight: number; progress: number } => {
         visited.add(task.id);
 
         const children = childrenOf.get(task.id) ?? [];
         const hasChildren = children.length > 0;
         const isExpanded = !collapsedIds.has(task.id);
         const segments = segmentsOf.get(task.id) ?? [task];
+        const isGroup = groupIds.has(task.id);
+        const group = isGroup ? { id: task.id, title: task.title } : parentGroup;
         const row: GanttRow = {
             task,
             segments,
             // Only synthesised units carry a row key; their segments never become rows.
             isMerged: task.rowKey !== null,
-            isGroup: groupIds.has(task.id),
+            isGroup,
             depth,
             hasChildren,
             isExpanded,
             rollupStart: task.start,
             rollupEnd: task.end,
             rollupProgress: task.progress,
+            group,
         };
 
         rows.push(row);
@@ -484,7 +609,7 @@ export function buildRows(tasks: GanttTask[], collapsedIds: ReadonlySet<string>)
             }
 
             const rowsBefore = rows.length;
-            const childSpan = walk(child, depth + 1);
+            const childSpan = walk(child, depth + 1, group);
 
             if (!isExpanded) {
                 rows.length = rowsBefore;
@@ -506,12 +631,12 @@ export function buildRows(tasks: GanttTask[], collapsedIds: ReadonlySet<string>)
     };
 
     for (const root of roots) {
-        walk(root, 0);
+        walk(root, 0, undefined);
     }
 
     for (const task of units) {
         if (!visited.has(task.id)) {
-            walk(task, 0);
+            walk(task, 0, undefined);
         }
     }
 
@@ -563,12 +688,14 @@ export function buildTimeline(
     if (scale === "day") {
         const start = addDays(extentStart, -2);
         const end = addDays(extentEnd, 2);
+        const weekday = formatWith({ weekday: "narrow" });
 
         for (let cursor = start; cursor <= end; cursor = addDays(cursor, 1)) {
             ticks.push({
                 start: cursor,
                 end: cursor,
                 label: String(cursor.getDate()),
+                subLabel: weekday.format(cursor),
                 isToday: isSameDay(cursor, today),
                 isNonWorking: isWeekend(cursor),
             });
@@ -606,6 +733,7 @@ export function buildTimeline(
     return {
         ticks,
         bands: buildBands(ticks, scale),
+        weeks: scale === "day" ? buildWeeks(ticks) : [],
         start: ticks[0].start,
         end: ticks[ticks.length - 1].end,
         scale,
@@ -619,8 +747,11 @@ function buildBands(ticks: TimelineTick[], scale: TimeScale): TimelineBand[] {
     // Years for a month scale, months otherwise. Compared as a number so only a
     // band boundary pays for a formatted label, not every column.
     const bandOf = (date: Date) => (scale === "month" ? date.getFullYear() : date.getFullYear() * 12 + date.getMonth());
+    // "April '26": the year is only there to tell one April from the next.
     const labelFor = (date: Date) =>
-        scale === "month" ? String(date.getFullYear()) : formatWith({ month: "long", year: "numeric" }).format(date);
+        scale === "month"
+            ? String(date.getFullYear())
+            : `${formatWith({ month: "long" }).format(date)} '${String(date.getFullYear() % 100).padStart(2, "0")}`;
 
     let current = NaN;
 
@@ -637,6 +768,36 @@ function buildBands(ticks: TimelineTick[], scale: TimeScale): TimelineBand[] {
     }
 
     return bands;
+}
+
+/** The ISO 8601 week number: weeks start on a Monday, and week 1 holds the year's first Thursday. */
+export function isoWeek(date: Date): number {
+    const thursday = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    thursday.setUTCDate(thursday.getUTCDate() + 4 - (thursday.getUTCDay() || 7));
+    const yearStart = Date.UTC(thursday.getUTCFullYear(), 0, 1);
+    return Math.ceil(((thursday.getTime() - yearStart) / MS_PER_DAY + 1) / 7);
+}
+
+/** Day ticks gathered into ISO weeks, labelled by week number. */
+function buildWeeks(ticks: TimelineTick[]): TimelineBand[] {
+    const weeks: TimelineBand[] = [];
+    const epoch = new Date(2000, 0, 3);
+    let current = NaN;
+
+    for (const tick of ticks) {
+        // Keyed by the week's Monday rather than its number, which repeats every year.
+        const monday = diffInDays(epoch, tick.start) - ((tick.start.getDay() + 6) % 7);
+        const previous = weeks[weeks.length - 1];
+
+        if (previous && monday === current) {
+            previous.span += 1;
+        } else {
+            current = monday;
+            weeks.push({ label: String(isoWeek(tick.start)), span: 1 });
+        }
+    }
+
+    return weeks;
 }
 
 /** Horizontal offset in pixels of a date within the timeline, interpolated inside its column. */
@@ -700,6 +861,82 @@ export function barGeometry(start: Date, end: Date, timeline: Timeline): { left:
 
     const left = instantToOffset(start, timeline);
     return { left, width: Math.max(8, instantToOffset(exclusiveEnd(end), timeline) - left) };
+}
+
+/**
+ * A bar held inside the timeline, with a note of which ends were cut off, so a
+ * bar running past a boundary the maker set can say it carries on.
+ */
+export function clipGeometry(
+    geometry: { left: number; width: number },
+    timeline: Timeline
+): { left: number; width: number; clippedStart: boolean; clippedEnd: boolean } {
+    const right = geometry.left + geometry.width;
+    const clippedStart = geometry.left < 0;
+    const clippedEnd = right > timeline.totalWidth;
+    const left = Math.max(0, geometry.left);
+
+    return {
+        left,
+        width: Math.max(0, Math.min(timeline.totalWidth, right) - left),
+        clippedStart,
+        clippedEnd,
+    };
+}
+
+/** Most days a marker is drawn in, so a mistyped year cannot draw thousands of icons. */
+const MAX_MARKER_DAYS = 400;
+
+/** The days a record covers inside the timeline, as local midnights. */
+export function markerDays(start: Date, end: Date, timeline: Timeline): Date[] {
+    const first = startOfDay(start) < timeline.start ? startOfDay(timeline.start) : startOfDay(start);
+    // A date-only end runs to the next midnight, which is not itself covered.
+    const stop = exclusiveEnd(end);
+    const lastCovered = hasTimeOfDay(stop) ? startOfDay(stop) : addDays(stop, -1);
+    const last = lastCovered > timeline.end ? startOfDay(timeline.end) : lastCovered;
+    const days: Date[] = [];
+
+    for (let day = first; day <= last && days.length < MAX_MARKER_DAYS; day = addDays(day, 1)) {
+        days.push(day);
+    }
+
+    return days;
+}
+
+/** Where bars on a row run into time the row is blocked out for, as exclusive-ended spans. */
+export function findClashes(
+    bars: readonly { start: Date; end: Date }[],
+    blockers: readonly { start: Date; end: Date }[]
+): { start: Date; end: Date }[] {
+    const clashes: { start: Date; end: Date }[] = [];
+
+    for (const bar of bars) {
+        const barEnd = exclusiveEnd(bar.end);
+
+        for (const blocker of blockers) {
+            const start = bar.start > blocker.start ? bar.start : blocker.start;
+            const blockerEnd = exclusiveEnd(blocker.end);
+            const end = barEnd < blockerEnd ? barEnd : blockerEnd;
+
+            if (end > start) {
+                clashes.push({ start, end });
+            }
+        }
+    }
+
+    return clashes;
+}
+
+/** Pixel geometry of a span whose end is exclusive, e.g. a clash between a shift and leave. */
+export function spanGeometry(start: Date, end: Date, timeline: Timeline): { left: number; width: number } {
+    if (timeline.scale === "day") {
+        const left = instantToOffset(start, timeline);
+        return { left, width: Math.max(2, instantToOffset(end, timeline) - left) };
+    }
+
+    const left = dateToOffset(start, timeline);
+    const right = dateToOffset(hasTimeOfDay(end) ? addDays(startOfDay(end), 1) : end, timeline);
+    return { left, width: Math.max(2, right - left) };
 }
 
 /** Days in an average Gregorian year's month, used to scale a drag at month zoom. */

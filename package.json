@@ -14,6 +14,7 @@
         "format:check": "prettier --check .",
         "test": "vitest run",
         "test:watch": "vitest",
+        "generate:sample": "node sample-data/generate-roster.mjs",
         "prepare": "husky"
     },
     "lint-staged": {

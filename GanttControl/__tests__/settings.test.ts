@@ -33,6 +33,11 @@ describe("manifest defaults", () => {
             "category",
             "color",
             "locked",
+            "label",
+            "quantity",
+            "subtitle",
+            "image",
+            "icon",
         ]);
     });
 
@@ -108,7 +113,7 @@ describe("parseFields", () => {
         expect(problems).toEqual([
             'Field mapping: row: "name" is not a setting. Use id, label',
             "Field mapping: end must be a column name",
-            'Field mapping: "strat" is not a setting. Use task, group, row, start, end, progress, parent, category, color, locked',
+            'Field mapping: "strat" is not a setting. Use task, group, row, start, end, progress, parent, category, color, locked, label, quantity, subtitle, image, icon',
         ]);
     });
 });
@@ -150,6 +155,11 @@ describe("parseOptions", () => {
             allowMove: true,
             allowResize: true,
             showSettings: true,
+            showAvatars: false,
+            barStyle: "filled",
+            columns: "",
+            display: [],
+            poolTitle: "Unallocated",
         });
     });
 
@@ -167,7 +177,7 @@ describe("parseOptions", () => {
         expect(problems).toEqual([
             'Options: density "roomy" is not one of comfortable, compact',
             "Options: allowMove must be true or false",
-            'Options: "zoom" is not a setting. Use density, timeScale, colorBy, legend, showToolbar, showCurrentTime, showProgress, showLegend, groupRows, allowMove, allowResize, showSettings',
+            'Options: "zoom" is not a setting. Use density, timeScale, colorBy, legend, showToolbar, showCurrentTime, showProgress, showLegend, groupRows, allowMove, allowResize, showSettings, showAvatars, barStyle, columns, display, poolTitle',
         ]);
     });
 });
@@ -189,6 +199,11 @@ describe("serializeFields", () => {
             category: "",
             color: "",
             locked: "",
+            label: "",
+            quantity: "",
+            subtitle: "",
+            image: "",
+            icon: "",
         });
     });
 

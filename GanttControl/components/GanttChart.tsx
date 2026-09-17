@@ -12,7 +12,8 @@ import {
 import * as React from "react";
 import { buildColorScheme } from "../colors";
 import { cssVars, LIST_COLUMN_WIDTHS, MIN_NAME_TEXT_WIDTH, NAME_CELL_CHROME, useGanttStyles } from "../styles";
-import { Density, GanttChartProps, GanttSelection, TaskEdit, TimeScale } from "../types";
+import { normaliseText } from "../display";
+import { Density, GanttChartProps, GanttRow, GanttSelection, TaskEdit, TimeScale } from "../types";
 import {
     applyPendingEdits,
     BAR_HEIGHT,
@@ -22,8 +23,10 @@ import {
     dateToOffset,
     getTaskExtent,
     getTaskStatus,
+    GROUP_ROW_PREFIX,
     instantToOffset,
     isSameDay,
+    POOL_GROUP_ID,
     ROW_HEIGHT,
     rowIdOf,
     selectRow,
@@ -31,8 +34,8 @@ import {
     startOfDay,
 } from "../utils";
 import { EmptyReason, GanttEmptyState } from "./GanttEmptyState";
-import { GanttTaskRow } from "./GanttTaskRow";
-import { FilterChip, GanttToolbar } from "./GanttToolbar";
+import { GanttTaskRow, GroupSpan } from "./GanttTaskRow";
+import { ColumnChoice, FilterChip, GanttToolbar } from "./GanttToolbar";
 import { DismissIcon, SettingsIcon } from "./icons";
 
 /**
@@ -60,6 +63,38 @@ const MS_PER_HOUR = 3600000;
 /** Chip keys: the search has one chip, and each legend item in the filter has its own. */
 const SEARCH_CHIP = "search";
 const LEGEND_CHIP = "legend:";
+
+/** Room the name column keeps beside configured columns, at the least and by default. */
+const MIN_NAME_COLUMN = 140;
+const DEFAULT_NAME_COLUMN = 220;
+
+const HEADER_BAND_HEIGHT = 24;
+const HEADER_WEEK_HEIGHT = 20;
+const HEADER_TICK_HEIGHT = 24;
+const HEADER_TALL_TICK_HEIGHT = 34;
+
+/** The hidden columns a user chose, from this browser; storage can be missing or refuse. */
+function readHiddenColumns(key: string): ReadonlySet<string> {
+    try {
+        const stored = window.localStorage.getItem(key);
+        const parsed: unknown = stored ? JSON.parse(stored) : [];
+        return new Set(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : []);
+    } catch {
+        return new Set();
+    }
+}
+
+function writeHiddenColumns(key: string, hidden: ReadonlySet<string>): void {
+    try {
+        if (hidden.size === 0) {
+            window.localStorage.removeItem(key);
+        } else {
+            window.localStorage.setItem(key, JSON.stringify([...hidden]));
+        }
+    } catch {
+        // The choice then lasts for this session only.
+    }
+}
 
 /** Follows value, but only once it has stopped changing for delayMs. */
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -90,6 +125,12 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     showCurrentTime,
     showProgress,
     showLegend,
+    barStyle,
+    listColumns,
+    columnsStorageKey,
+    showAvatars,
+    poolTitle,
+    displayNotes,
     showSettings,
     onOpenSettings,
     isPreviewing,
@@ -168,6 +209,51 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     const [dismissedKey, setDismissedKey] = React.useState("");
     const problemsKey = settingProblems.join("|");
     const [dismissedProblemsKey, setDismissedProblemsKey] = React.useState("");
+    const notesKey = displayNotes.join("|");
+    const [dismissedNotesKey, setDismissedNotesKey] = React.useState("");
+
+    /** Columns ------------------------------------------------------------ */
+    /** The columns this user hid, kept in their browser against this chart's set of columns. */
+    const [hiddenColumns, setHiddenColumns] = React.useState<ReadonlySet<string>>(() =>
+        readHiddenColumns(columnsStorageKey)
+    );
+
+    React.useEffect(() => setHiddenColumns(readHiddenColumns(columnsStorageKey)), [columnsStorageKey]);
+
+    const handleToggleColumn = React.useCallback(
+        (key: string) => {
+            setHiddenColumns((current) => {
+                const next = new Set(current);
+
+                if (next.has(key)) {
+                    next.delete(key);
+                } else {
+                    next.add(key);
+                }
+
+                writeHiddenColumns(columnsStorageKey, next);
+                return next;
+            });
+        },
+        [columnsStorageKey]
+    );
+
+    // The name column holds the tree, so it is never hidden.
+    const visibleColumns = React.useMemo(
+        () => listColumns?.filter((column) => column.key === "@name" || !hiddenColumns.has(column.key)) ?? null,
+        [listColumns, hiddenColumns]
+    );
+    const columnChoices = React.useMemo<ColumnChoice[]>(
+        () =>
+            (listColumns ?? [])
+                .filter((column) => column.key !== "@name")
+                .map((column) => ({ key: column.key, label: column.label, visible: !hiddenColumns.has(column.key) })),
+        [listColumns, hiddenColumns]
+    );
+    const groupAsColumn = visibleColumns?.some((column) => column.key === "@group") ?? false;
+
+    /** The unallocated pool's category filter; blank shows every category. */
+    const [poolCategory, setPoolCategory] = React.useState("");
 
     /** Editing ---------------------------------------------------------- */
     /**
@@ -283,17 +369,37 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         });
     }, []);
 
+    /** The categories in the pool, for its filter, in the order they first appear. */
+    const poolCategories = React.useMemo(() => {
+        const seen = new Map<string, string>();
+
+        for (const task of tasks) {
+            const key = normaliseText(task.category);
+
+            if (task.kind === "pool" && key && !seen.has(key)) {
+                seen.set(key, (task.category ?? "").trim());
+            }
+        }
+
+        return [...seen.entries()].map(([key, label]) => ({ key, label }));
+    }, [tasks]);
+    // A category that has left the data stops filtering rather than emptying the pool.
+    const activePoolCategory = poolCategories.some((item) => item.key === poolCategory) ? poolCategory : "";
+
     const filteredTasks = React.useMemo(() => {
         const term = search.trim().toLowerCase();
 
-        if (!term && legendFilter.size === 0) {
+        if (!term && legendFilter.size === 0 && !activePoolCategory) {
             return liveTasks;
         }
 
         return liveTasks.filter(
             (task) =>
+                (!activePoolCategory || task.kind !== "pool" || normaliseText(task.category) === activePoolCategory) &&
                 (!term ||
                     task.title.toLowerCase().indexOf(term) >= 0 ||
+                    (task.label ?? "").toLowerCase().indexOf(term) >= 0 ||
+                    (task.subtitle ?? "").toLowerCase().indexOf(term) >= 0 ||
                     (task.category ?? "").toLowerCase().indexOf(term) >= 0 ||
                     (task.rowKey ?? "").toLowerCase().indexOf(term) >= 0 ||
                     (task.rowTitle ?? "").toLowerCase().indexOf(term) >= 0 ||
@@ -304,9 +410,18 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                         colors.keyFor(task.colorKey ?? "", getTaskStatus(task.start, task.end, task.progress, today))
                     ))
         );
-    }, [liveTasks, search, legendFilter, colors, today]);
+    }, [liveTasks, search, legendFilter, colors, today, activePoolCategory]);
 
-    const rows = React.useMemo(() => buildRows(filteredTasks, collapsedIds), [filteredTasks, collapsedIds]);
+    // With groups shown as a column there are no heading rows, so nothing to
+    // collapse them with: a heading collapsed before would hide its rows for good.
+    const rows = React.useMemo(() => {
+        if (!groupAsColumn) {
+            return buildRows(filteredTasks, collapsedIds, poolTitle);
+        }
+
+        const collapsed = new Set([...collapsedIds].filter((id) => !id.startsWith(GROUP_ROW_PREFIX)));
+        return buildRows(filteredTasks, collapsed, poolTitle).filter((row) => !row.isGroup);
+    }, [filteredTasks, collapsedIds, poolTitle, groupAsColumn]);
 
     // Canvas pushes every keystroke of a bound input through, so wait for the
     // boundary to settle rather than rebuilding the timeline per character.
@@ -335,17 +450,48 @@ export const GanttChart: React.FC<GanttChartProps> = ({
             ? LIST_COLUMN_WIDTHS.progress
             : LIST_COLUMN_WIDTHS.progressCompact
         : 0;
-    const minListWidth = Math.max(
-        MIN_LIST_WIDTH[density] -
-            (showProgress ? 0 : isDetailed ? LIST_COLUMN_WIDTHS.progress : LIST_COLUMN_WIDTHS.progressCompact),
-        0
-    );
+    // Configured columns keep their own widths, and the name column takes what is left.
+    const fixedColumnsWidth = visibleColumns
+        ? visibleColumns.reduce((sum, column) => sum + (column.key === "@name" ? 0 : column.width), 0)
+        : 0;
+    const minListWidth = visibleColumns
+        ? fixedColumnsWidth + MIN_NAME_COLUMN
+        : Math.max(
+              MIN_LIST_WIDTH[density] -
+                  (showProgress ? 0 : isDetailed ? LIST_COLUMN_WIDTHS.progress : LIST_COLUMN_WIDTHS.progressCompact),
+              0
+          );
+    const maxListWidth = visibleColumns ? Math.max(MAX_LIST_WIDTH, fixedColumnsWidth + 480) : MAX_LIST_WIDTH;
 
     // Switching into detailed mode from a narrow compact pane would hide the
     // task name behind the extra columns, so widen to that mode's floor.
     React.useEffect(() => {
         setListWidth((current) => Math.max(minListWidth, current));
     }, [density, minListWidth]);
+
+    const clampListWidth = (width: number) => Math.min(maxListWidth, Math.max(minListWidth, width));
+    const columnsKey = listColumns ? listColumns.map((column) => `${column.key}:${column.width}`).join("|") : "";
+    const previousFixedWidth = React.useRef<number | null>(null);
+
+    // A new set of columns starts the pane at their width plus room for the name.
+    React.useEffect(() => {
+        previousFixedWidth.current = fixedColumnsWidth;
+
+        if (visibleColumns) {
+            setListWidth(clampListWidth(fixedColumnsWidth + DEFAULT_NAME_COLUMN));
+        }
+        // Keyed on the columns alone; hiding one is handled below.
+    }, [columnsKey]);
+
+    // Showing or hiding a column moves the pane by that column, so the name keeps the room it had.
+    React.useEffect(() => {
+        const previous = previousFixedWidth.current;
+        previousFixedWidth.current = fixedColumnsWidth;
+
+        if (visibleColumns && previous !== null && previous !== fixedColumnsWidth) {
+            setListWidth((current) => clampListWidth(current + fixedColumnsWidth - previous));
+        }
+    }, [fixedColumnsWidth]);
 
     // Derived from every task, not just the visible rows, so that collapse-all
     // still reaches parents whose own parent is already collapsed.
@@ -356,7 +502,11 @@ export const GanttChart: React.FC<GanttChartProps> = ({
      * of its column, so indentation stops once the name is down to its minimum
      * legible width. Widening the splitter buys back indentation depth.
      */
-    const trailingColumns = isDetailed ? LIST_COLUMN_WIDTHS.date * 2 + progressColumnWidth : progressColumnWidth;
+    const trailingColumns = visibleColumns
+        ? fixedColumnsWidth
+        : isDetailed
+          ? LIST_COLUMN_WIDTHS.date * 2 + progressColumnWidth
+          : progressColumnWidth;
     const maxIndent = Math.max(0, listWidth - trailingColumns - NAME_CELL_CHROME - MIN_NAME_TEXT_WIDTH);
 
     /** Splitter ---------------------------------------------------------- */
@@ -376,7 +526,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
 
         const handleMove = (moveEvent: PointerEvent) => {
             const next = startWidth + moveEvent.clientX - startX;
-            setListWidth(Math.min(MAX_LIST_WIDTH, Math.max(minListWidth, next)));
+            setListWidth(Math.min(maxListWidth, Math.max(minListWidth, next)));
         };
 
         const stopResize = () => {
@@ -409,7 +559,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
             setListWidth((current) => Math.max(minListWidth, current - step));
         } else if (event.key === "ArrowRight") {
             event.preventDefault();
-            setListWidth((current) => Math.min(MAX_LIST_WIDTH, current + step));
+            setListWidth((current) => Math.min(maxListWidth, current + step));
         }
     };
 
@@ -515,6 +665,94 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     const currentTimeOffset = showCurrentTime ? instantToOffset(now, timeline) : 0;
     const isTodayInRange = showCurrentTime && today >= timeline.start && today <= timeline.end;
 
+    /** The pool's category filter, as a strip of buttons beside its heading. */
+    const poolFilter =
+        poolCategories.length > 1 ? (
+            <span
+                className={styles.poolFilter}
+                role="group"
+                aria-label={`Filter ${poolTitle}`}
+                // Choosing a category is not choosing the row it sits on.
+                onClick={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+            >
+                {[{ key: "", label: "All" }, ...poolCategories].map((item) => (
+                    <button
+                        key={item.key || "all"}
+                        type="button"
+                        aria-pressed={activePoolCategory === item.key}
+                        className={mergeClasses(
+                            styles.poolFilterButton,
+                            activePoolCategory === item.key && styles.poolFilterButtonActive
+                        )}
+                        onClick={() => setPoolCategory(item.key)}
+                    >
+                        {item.label}
+                    </button>
+                ))}
+            </span>
+        ) : null;
+
+    /**
+     * With groups as a column, each group's label is drawn once over its rows
+     * in view, from the first of them the viewport shows, so it stays readable
+     * however far into a long group the user has scrolled.
+     */
+    const groupSpans = React.useMemo(() => {
+        const spans = new Map<number, GroupSpan>();
+        const ends = new Set<number>();
+
+        if (!groupAsColumn) {
+            return { spans, ends };
+        }
+
+        const viewportFirst = Math.floor(scrollTop / rowHeight);
+        // Counted only to the viewport's foot, so the label centres on what can be seen.
+        const spanLimit = Math.min(lastVisible, Math.ceil((scrollTop + viewportHeight) / rowHeight));
+        const groupOf = (row: GanttRow | undefined) => row?.group?.id ?? "";
+
+        for (let index = firstVisible; index < lastVisible; index++) {
+            const row = rows[index];
+
+            if (groupOf(rows[index + 1]) !== groupOf(row)) {
+                ends.add(index);
+            }
+
+            // A span starts at the first row of a group, or at the viewport's top inside one.
+            const startsHere =
+                index === Math.max(firstVisible, viewportFirst)
+                    ? true
+                    : index > viewportFirst && groupOf(rows[index - 1]) !== groupOf(row);
+
+            if (!startsHere || !row.group) {
+                continue;
+            }
+
+            let count = 1;
+
+            while (index + count < Math.max(spanLimit, index + 1) && groupOf(rows[index + count]) === groupOf(row)) {
+                count++;
+            }
+
+            spans.set(index, {
+                rows: count,
+                content: (
+                    <>
+                        <span>{row.group.title}</span>
+                        {row.group.id === POOL_GROUP_ID && poolFilter}
+                    </>
+                ),
+            });
+        }
+
+        return { spans, ends };
+    }, [groupAsColumn, rows, firstVisible, lastVisible, scrollTop, viewportHeight, rowHeight, poolFilter]);
+
+    const headerHeight =
+        HEADER_BAND_HEIGHT +
+        (timeline.weeks.length > 0 ? HEADER_WEEK_HEIGHT : 0) +
+        (timeScale === "day" ? HEADER_TALL_TICK_HEIGHT : HEADER_TICK_HEIGHT);
+
     // The row to highlight: the selected row itself, or the one carrying the
     // selected record, which on a merged row is one of its segments.
     const activeRowId = React.useMemo(() => {
@@ -543,6 +781,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         [cssVars.columnWidth]: `${timeline.columnWidth}px`,
         [cssVars.listWidth]: `${listWidth}px`,
         [cssVars.timelineWidth]: `${timeline.totalWidth}px`,
+        [cssVars.headerHeight]: `${headerHeight}px`,
     } as React.CSSProperties;
 
     /**
@@ -564,17 +803,39 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                         </div>
                     ))}
                 </div>
-                <div className={styles.tickRow}>
+                {timeline.weeks.length > 0 && (
+                    <div className={styles.weekRow}>
+                        {timeline.weeks.map((week, index) => (
+                            <div
+                                key={`${week.label}-${index}`}
+                                className={styles.weekCell}
+                                style={{ width: `${week.span * timeline.columnWidth}px` }}
+                                title={`Week ${week.label}`}
+                            >
+                                {week.label}
+                            </div>
+                        ))}
+                    </div>
+                )}
+                <div className={mergeClasses(styles.tickRow, timeline.scale === "day" && styles.tickRowTall)}>
                     {timeline.ticks.map((tick) => (
                         <div
                             key={tick.start.getTime()}
                             className={mergeClasses(
                                 styles.tickCell,
+                                tick.subLabel !== undefined && styles.tickCellTwoLine,
                                 tick.isNonWorking && styles.tickCellNonWorking,
                                 tick.isToday && showCurrentTime && styles.tickCellToday
                             )}
                         >
-                            {tick.label}
+                            {tick.subLabel !== undefined ? (
+                                <>
+                                    <span className={styles.tickSubLabel}>{tick.subLabel}</span>
+                                    <span className={styles.tickLabel}>{tick.label}</span>
+                                </>
+                            ) : (
+                                tick.label
+                            )}
                         </div>
                     ))}
                 </div>
@@ -605,6 +866,16 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                                     left: `${index * timeline.columnWidth}px`,
                                     width: `${timeline.columnWidth}px`,
                                 }}
+                            />
+                        ) : null
+                    )}
+                    {/* A dashed rule where each week starts, on the Monday the week numbers count from. */}
+                    {timeline.ticks.map((tick, index) =>
+                        index > 0 && tick.start.getDay() === 1 ? (
+                            <div
+                                key={`week-${tick.start.getTime()}`}
+                                className={styles.weekLine}
+                                style={{ left: `${index * timeline.columnWidth}px` }}
                             />
                         ) : null
                     )}
@@ -684,6 +955,8 @@ export const GanttChart: React.FC<GanttChartProps> = ({
             onToggleAll={handleToggleAll}
             onScrollToToday={() => scrollToDate(today)}
             onFitToWidth={handleFitToWidth}
+            columns={columnChoices}
+            onToggleColumn={handleToggleColumn}
             onOpenSettings={openSettings}
         />
     ) : null;
@@ -812,6 +1085,26 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                 </MessageBar>
             )}
 
+            {/* For the maker only: values the display rules leave out. */}
+            {openSettings && notesKey && notesKey !== dismissedNotesKey && (
+                <MessageBar intent="info" layout="multiline" style={{ flexShrink: 0 }}>
+                    <MessageBarBody>
+                        <MessageBarTitle>Display rules</MessageBarTitle>
+                        {displayNotes.join(". ")}. Map them in the settings panel under Display.
+                    </MessageBarBody>
+                    <MessageBarActions
+                        containerAction={
+                            <Button
+                                appearance="transparent"
+                                aria-label="Dismiss"
+                                icon={<DismissIcon />}
+                                onClick={() => setDismissedNotesKey(notesKey)}
+                            />
+                        }
+                    />
+                </MessageBar>
+            )}
+
             {unmatchedKey && unmatchedKey !== dismissedKey && (
                 <MessageBar intent="warning" layout="multiline" style={{ flexShrink: 0 }}>
                     <MessageBarBody>
@@ -841,13 +1134,46 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                 <div className={styles.grid} role="grid" aria-rowcount={rows.length + 1} aria-label="Gantt chart">
                     <div className={styles.headerRow} role="row" aria-rowindex={1}>
                         <div className={mergeClasses(styles.listPane, styles.listPaneHeader)}>
-                            <div
-                                role="columnheader"
-                                className={mergeClasses(styles.listCell, styles.listCellName, styles.headerCellText)}
-                            >
-                                Task
-                            </div>
-                            {!isDetailed && showProgress && (
+                            {visibleColumns ? (
+                                visibleColumns.map((column) => (
+                                    <div
+                                        key={column.key}
+                                        role="columnheader"
+                                        title={column.label}
+                                        className={mergeClasses(
+                                            styles.listCell,
+                                            column.key === "@name" ? styles.listCellName : styles.listCellColumn,
+                                            styles.headerCellText,
+                                            column.key === "@group" && styles.listCellGroup
+                                        )}
+                                        style={
+                                            column.key === "@name"
+                                                ? column.width
+                                                    ? {
+                                                          flexGrow: 0,
+                                                          flexBasis: `${column.width}px`,
+                                                          width: `${column.width}px`,
+                                                      }
+                                                    : undefined
+                                                : { width: `${column.width}px` }
+                                        }
+                                    >
+                                        {column.label}
+                                    </div>
+                                ))
+                            ) : (
+                                <div
+                                    role="columnheader"
+                                    className={mergeClasses(
+                                        styles.listCell,
+                                        styles.listCellName,
+                                        styles.headerCellText
+                                    )}
+                                >
+                                    Task
+                                </div>
+                            )}
+                            {!visibleColumns && !isDetailed && showProgress && (
                                 <div
                                     role="columnheader"
                                     className={mergeClasses(
@@ -859,7 +1185,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                                     %
                                 </div>
                             )}
-                            {isDetailed && (
+                            {!visibleColumns && isDetailed && (
                                 <>
                                     <div
                                         role="columnheader"
@@ -901,7 +1227,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                                 aria-label="Resize the task column"
                                 aria-valuenow={listWidth}
                                 aria-valuemin={minListWidth}
-                                aria-valuemax={MAX_LIST_WIDTH}
+                                aria-valuemax={maxListWidth}
                                 tabIndex={0}
                                 className={mergeClasses(styles.splitter, isResizing && styles.splitterActive)}
                                 onPointerDown={handleSplitterDown}
@@ -943,6 +1269,12 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                                 isTabStop={row.task.id === tabStopId}
                                 maxIndent={maxIndent}
                                 showProgress={showProgress}
+                                barStyle={barStyle}
+                                columns={visibleColumns}
+                                showAvatars={showAvatars}
+                                groupSpan={groupSpans.spans.get(firstVisible + index)}
+                                isGroupEnd={groupSpans.ends.has(firstVisible + index)}
+                                headingExtra={row.isGroup && row.task.id === POOL_GROUP_ID ? poolFilter : undefined}
                                 canEdit={canEdit}
                                 pendingIds={pendingIds}
                                 onSelect={handleSelect}

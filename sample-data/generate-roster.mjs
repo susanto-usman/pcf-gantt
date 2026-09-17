@@ -26,6 +26,26 @@
 // share a row with the swing they cover, the ones whose hours genuinely clash
 // stack while the rest sit side by side in the same day.
 //
+// FIFO and DIDO swings come with travel: a flight or a drive in on the first
+// day and out on the last, written with real hours and category "Travel". The
+// travel column says which way each trip goes (Flight in, Flight out, Drive in,
+// Drive out), so the settings panel's value mapper can give each its own icon.
+// They share the employee's row with the swing, and are meant to be drawn as
+// icons by display rules in Options, e.g.
+//   "display": [
+//       {"when": {"travel": "Flight in"}, "as": "icon", "icon": "flight-in"},
+//       {"when": {"travel": "Flight out"}, "as": "icon", "icon": "flight-out"},
+//       {"when": {"travel": ["Drive in", "Drive out"]}, "as": "icon", "icon": "car"},
+//       {"when": {"category": "Leave"}, "as": "icon", "icon": "home", "blocks": true}
+//   ]
+// A swing lost to annual leave has no travel, one trip in twelve is rebooked a
+// day early, and now and then the trip home is skipped for a follow-on job.
+//
+// Some fly-in crews land at a regional airport rather than the site's own strip
+// and finish the trip by road: a Flight in then a Drive in on the same morning,
+// and a Drive out then a Flight out going home. The two legs are separate
+// records, so the day shows two travel icons side by side.
+//
 // Usage: node sample-data/generate-roster.mjs [asOfDate]
 // asOfDate (YYYY-MM-DD, default today's date) drives the progress column.
 // Output is deterministic: the same asOfDate always produces the same file.
@@ -204,6 +224,43 @@ const rng = mulberry32(20260701);
 const leaveRng = mulberry32(20260902);
 // Likewise for the timed tasks: their own stream keeps every other row put.
 const taskRng = mulberry32(20261104);
+// And for travel, so adding it moved no other record.
+const travelRng = mulberry32(20260917);
+// And for the road leg after a flight, so the trips above keep their dates.
+const transferRng = mulberry32(20261118);
+
+// Where each fly-in, drive-out crew travels from, with the hours a trip takes.
+// transfer is the regional airport some crews land at instead, and the drive
+// from there to site; a flight there lands transfer.flightHours after take-off.
+const FLIGHTS = [
+    {
+        from: "Perth",
+        out: [5, 30],
+        back: [17, 45],
+        hours: 2,
+        transfer: { via: "Kalgoorlie", flightHours: 1.25, driveHours: 1.5 },
+    },
+    {
+        from: "Brisbane",
+        out: [5, 0],
+        back: [16, 30],
+        hours: 3,
+        transfer: { via: "Moranbah", flightHours: 1.75, driveHours: 1 },
+    },
+    {
+        from: "Adelaide",
+        out: [6, 15],
+        back: [18, 0],
+        hours: 3,
+        transfer: { via: "Roxby Downs", flightHours: 2, driveHours: 0.75 },
+    },
+];
+// Waiting for the bus at the airport, either way.
+const TRANSFER_WAIT_HOURS = 0.5;
+const DRIVES = [
+    { from: "Kalgoorlie", out: [4, 30], back: [18, 30], hours: 2 },
+    { from: "Mackay", out: [4, 0], back: [19, 0], hours: 3 },
+];
 
 const rows = [];
 const usedNames = new Set();
@@ -264,6 +321,7 @@ const fields = [
     "crew",
     "roster",
     "shift",
+    "travel",
 ];
 const outDir = dirname(fileURLToPath(import.meta.url));
 
@@ -288,10 +346,12 @@ const swingCount = rows.filter((row) => row.category === "Day shift" || row.cate
 const rosterSwitchers = new Set(rows.filter((row) => row.title === "Roster change").map((row) => row.employee.id)).size;
 const timedTasks = rows.filter((row) => row.category === "Site task");
 const timedTaskPeople = new Set(timedTasks.map((row) => row.employee.id)).size;
+const travel = rows.filter((row) => row.category === "Travel");
+const transfers = travel.filter((row) => row.travel === "Drive in" && row.roster.includes("FIFO")).length;
 console.log(
     `Wrote ${rows.length} rows (${EMPLOYEE_COUNT} employees, ${swingCount} swings, ` +
         `${rosterSwitchers} on more than one roster, ${timedTasks.length} timed site tasks ` +
-        `across ${timedTaskPeople} employees) to employee-roster.json and employee-roster.csv in ${outDir}`
+        `across ${timedTaskPeople} employees, ${travel.length} trips, ${transfers} flights finished by road) to employee-roster.json and employee-roster.csv in ${outDir}`
 );
 
 function buildAssignments(firstRoster, dayShiftOnly) {
@@ -344,8 +404,122 @@ function buildAssignments(firstRoster, dayShiftOnly) {
 
     assignments.push(...buildOverlappingLeave(assignments));
     assignments.push(...buildTimedTasks(assignments));
+    assignments.push(...buildTravel(assignments));
 
     return assignments;
+}
+
+// Travel in on the first day of each FIFO or DIDO swing and out on its last.
+// Each employee keeps one home port, so their trips read as a pattern down the
+// row. Night-shift swings travel in the afternoon, ahead of the first shift.
+function buildTravel(assignments) {
+    const swings = assignments.filter((row) => row.category === "Day shift" || row.category === "Night shift");
+    const byAir = swings.filter((row) => row.roster.includes("FIFO"));
+    const byRoad = swings.filter((row) => row.roster.includes("DIDO"));
+    const trips = [];
+
+    if (byAir.length > 0) {
+        const port = FLIGHTS[Math.floor(travelRng() * FLIGHTS.length)];
+        // One employee in three flies to the regional airport and drives the rest.
+        const viaRoad = transferRng() < 1 / 3;
+
+        for (const swing of byAir) {
+            const legs = tripsFor(swing, port, "Flight", `${port.from}`);
+            trips.push(...(viaRoad ? withRoadTransfer(legs, port.transfer) : legs));
+        }
+    }
+
+    if (byRoad.length > 0) {
+        const town = DRIVES[Math.floor(travelRng() * DRIVES.length)];
+
+        for (const swing of byRoad) {
+            trips.push(...tripsFor(swing, town, "Drive", town.from));
+        }
+    }
+
+    return trips;
+}
+
+function tripsFor(swing, place, mode, from) {
+    const trips = [];
+    // A night swing flies in during the afternoon, ahead of its first shift.
+    const inHours = swing.shift === "Night" ? [13, 0] : place.out;
+    // One trip in twelve was rebooked a day early.
+    const inDay = travelRng() < 1 / 12 ? addDays(swing.start, -1) : swing.start;
+    const outDay = swing.end;
+
+    trips.push({
+        ...makeRow(
+            `${mode} in - ${from} to site`,
+            "Travel",
+            at(inDay, inHours),
+            at(inDay, [inHours[0] + place.hours, inHours[1]]),
+            "",
+            swing.roster
+        ),
+        travel: `${mode} in`,
+    });
+
+    // The trip home is skipped now and then, when the crew stays on for the next job.
+    if (travelRng() >= 1 / 20) {
+        const outHours = swing.shift === "Night" ? [9, 0] : place.back;
+        trips.push({
+            ...makeRow(
+                `${mode} out - site to ${from}`,
+                "Travel",
+                at(outDay, outHours),
+                at(outDay, [outHours[0] + place.hours, outHours[1]]),
+                "",
+                swing.roster
+            ),
+            travel: `${mode} out`,
+        });
+    }
+
+    return trips;
+}
+
+// Splits each flight into a shorter flight to the regional airport and a drive
+// between there and site: in, the drive follows the landing; out, the drive
+// leaves at the flight's old time and the flight follows it.
+function withRoadTransfer(trips, transfer) {
+    return trips.flatMap((trip) => {
+        const flightMinutes = transfer.flightHours * 60;
+        const driveMinutes = transfer.driveHours * 60;
+        const waitMinutes = TRANSFER_WAIT_HOURS * 60;
+
+        if (trip.travel === "Flight in") {
+            const landed = addMinutes(trip.start, flightMinutes);
+            const driveFrom = addMinutes(landed, waitMinutes);
+            return [
+                { ...trip, title: trip.title.replace("to site", `to ${transfer.via}`), end: landed },
+                {
+                    ...trip,
+                    title: `Drive in - ${transfer.via} to site`,
+                    start: driveFrom,
+                    end: addMinutes(driveFrom, driveMinutes),
+                    travel: "Drive in",
+                },
+            ];
+        }
+
+        const arrived = addMinutes(trip.start, driveMinutes);
+        const flightFrom = addMinutes(arrived, waitMinutes);
+        return [
+            {
+                ...trip,
+                title: `Drive out - site to ${transfer.via}`,
+                end: arrived,
+                travel: "Drive out",
+            },
+            {
+                ...trip,
+                title: trip.title.replace("site to", `${transfer.via} to`),
+                start: flightFrom,
+                end: addMinutes(flightFrom, flightMinutes),
+            },
+        ];
+    });
 }
 
 // Several activities on one day of a swing, each with a start and finish time.
@@ -499,6 +673,10 @@ function at(day, [hour, minute]) {
     const moment = new Date(day);
     moment.setHours(hour, minute, 0, 0);
     return moment;
+}
+
+function addMinutes(date, minutes) {
+    return new Date(date.getTime() + minutes * 60000);
 }
 
 function parseDate(text) {
