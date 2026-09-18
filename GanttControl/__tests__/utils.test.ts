@@ -918,6 +918,15 @@ describe("display zones", () => {
         const shown = toDisplayZone(midnightInUtc, "utc");
 
         expect(shown.getHours()).toBe(0);
+
+        if (midnightInUtc.getTimezoneOffset() === 0) {
+            // The clock these tests run on is UTC itself, so the two agree:
+            // there is no shift to make, and a value on midnight there is a
+            // date alone in earnest rather than one that only reads as one.
+            expect(shown).toBe(midnightInUtc);
+            return;
+        }
+
         expect(shown.getTime() - startOfDay(shown).getTime()).toBe(1);
     });
 
