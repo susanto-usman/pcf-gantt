@@ -40,6 +40,26 @@ const FilledIcon: React.FC<IconProps & { children: React.ReactNode }> = ({ child
 const PLANE =
     "M18.2 10c0 .8-.9 1.25-1.9 1.25h-3.8l-3.9 6.1H6.9l2.1-6.1H5.2l-1.5 1.9H2.3l.9-3.15-.9-3.15h1.4l1.5 1.9H9L6.9 2.65h1.7l3.9 6.1h3.8c1 0 1.9.45 1.9 1.25Z";
 
+/**
+ * A helicopter seen from the side, nose to the right, as 🚁 draws it: main
+ * rotor over the cabin, tail boom out to the left with its fin and rotor, and
+ * skids below. The `transform` tilts the whole machine for the in and out
+ * variants; the numbers there centre it above their ground bar.
+ */
+const Helicopter: React.FC<{ transform?: string }> = ({ transform }) => (
+    <g transform={transform}>
+        <rect x="1.6" y="3.4" width="16.8" height="1.1" rx="0.55" />
+        <rect x="9.4" y="4.4" width="1.2" height="1.8" />
+        <rect x="1.3" y="4.9" width="3.5" height="0.9" rx="0.45" />
+        <rect x="2.2" y="5.3" width="1.7" height="4" rx="0.8" />
+        <rect x="3" y="8.1" width="5.6" height="1.2" rx="0.6" />
+        <ellipse cx="11.9" cy="8.6" rx="4.5" ry="2.7" />
+        <rect x="8.1" y="11" width="1.2" height="3.2" />
+        <rect x="12.3" y="11" width="1.2" height="3.2" />
+        <rect x="4.6" y="14" width="10.8" height="1.1" rx="0.55" />
+    </g>
+);
+
 export const ChevronRightIcon: React.FC<IconProps> = (props) => (
     <Icon {...props}>
         <path d="M7.75 4.75 13 10l-5.25 5.25" />
@@ -142,6 +162,15 @@ export const ColumnsIcon: React.FC<IconProps> = (props) => (
     </Icon>
 );
 
+/** A globe, for the clock the times are read on. */
+export const GlobeIcon: React.FC<IconProps> = (props) => (
+    <Icon {...props}>
+        <circle cx="10" cy="10" r="7" />
+        <path d="M3.4 7.75h13.2M3.4 12.25h13.2" />
+        <path d="M10 3c1.85 2 2.75 4.35 2.75 7S11.85 17 10 17 7.25 12.65 7.25 10 8.15 3 10 3Z" />
+    </Icon>
+);
+
 export const FlagIcon: React.FC<IconProps> = (props) => (
     <Icon {...props}>
         <path d="M5 17V3.5M5 4h9.5l-2 3.5 2 3.5H5" />
@@ -154,7 +183,7 @@ export const FlagIcon: React.FC<IconProps> = (props) => (
  * waiting on this list.
  */
 export const MARKER_ICONS: Record<string, React.FC<IconProps>> = {
-    // Travel is drawn solid, after the emoji ✈️ 🛫 🛬 🚗, so it reads at a glance
+    // Travel is drawn solid, after the emoji ✈️ 🛫 🛬 🚁 🚗 🚌, so it reads at a glance
     // beside the outlined icons and still takes the display rule's colour.
     plane: (props) => (
         <FilledIcon {...props}>
@@ -170,6 +199,23 @@ export const MARKER_ICONS: Record<string, React.FC<IconProps>> = {
     "flight-in": (props) => (
         <FilledIcon {...props}>
             <path d={PLANE} transform="translate(0 -1.8) rotate(32 10 10) scale(0.88) translate(1.2 1.2)" />
+            <rect x="2" y="17" width="16" height="1.6" rx="0.8" />
+        </FilledIcon>
+    ),
+    helicopter: (props) => (
+        <FilledIcon {...props}>
+            <Helicopter />
+        </FilledIcon>
+    ),
+    "helicopter-out": (props) => (
+        <FilledIcon {...props}>
+            <Helicopter transform="translate(3.71 1.76) rotate(-22 10 10) scale(0.82)" />
+            <rect x="2" y="17" width="16" height="1.6" rx="0.8" />
+        </FilledIcon>
+    ),
+    "helicopter-in": (props) => (
+        <FilledIcon {...props}>
+            <Helicopter transform="translate(-0.35 3.11) rotate(22 10 10) scale(0.82)" />
             <rect x="2" y="17" width="16" height="1.6" rx="0.8" />
         </FilledIcon>
     ),
@@ -196,6 +242,19 @@ export const MARKER_ICONS: Record<string, React.FC<IconProps>> = {
                 d="M2.2 13.6v-2.7c0-.75.45-1.35 1.15-1.55l2.05-.6 1.85-3.05c.3-.5.85-.8 1.45-.8h4.2c.55 0 1.05.25 1.4.7l2.35 3.1 1.35.4c.75.2 1.25.85 1.25 1.6v2.9H2.2ZM8.2 6.3h2.3v2.5H6.7l1.5-2.5Zm3.8 0h1.3l1.9 2.5H12V6.3Z"
             />
             {/* Each wheel is ringed in the surface colour, so it stands clear of the body. */}
+            <circle cx="6" cy="14.2" r="2.1" style={{ fill: tokens.colorNeutralBackground1 }} />
+            <circle cx="6" cy="14.2" r="1.5" />
+            <circle cx="14" cy="14.2" r="2.1" style={{ fill: tokens.colorNeutralBackground1 }} />
+            <circle cx="14" cy="14.2" r="1.5" />
+        </FilledIcon>
+    ),
+    bus: (props) => (
+        <FilledIcon {...props}>
+            <path
+                fillRule="evenodd"
+                d="M4 3.8h12c1 0 1.8.8 1.8 1.8v8.6H2.2V5.6c0-1 .8-1.8 1.8-1.8Zm-.1 2.1h5.2v3.3H3.9V5.9Zm7 0h5.2v3.3h-5.2V5.9Z"
+            />
+            {/* Ringed in the surface colour like the car, so each wheel stands clear of the body. */}
             <circle cx="6" cy="14.2" r="2.1" style={{ fill: tokens.colorNeutralBackground1 }} />
             <circle cx="6" cy="14.2" r="1.5" />
             <circle cx="14" cy="14.2" r="2.1" style={{ fill: tokens.colorNeutralBackground1 }} />

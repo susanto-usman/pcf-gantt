@@ -1,6 +1,7 @@
 import {
     Density,
     DragMode,
+    DrawnSpan,
     GanttRow,
     GanttSelection,
     GanttTask,
@@ -8,6 +9,7 @@ import {
     TimelineBand,
     TimelineTick,
     TimeScale,
+    TimeZoneMode,
 } from "./types";
 
 const MS_PER_DAY = 86400000;
@@ -94,6 +96,54 @@ export function hasTimeOfDay(date: Date): boolean {
     return date.getHours() + date.getMinutes() + date.getSeconds() + date.getMilliseconds() > 0;
 }
 
+/**
+ * The millisecond a value carrying a time of day is nudged by when it lands on
+ * midnight of another clock, so it does not come to read as a date alone.
+ * See shiftToZone.
+ */
+const ZONE_NUDGE_MS = 1;
+
+/** Milliseconds into its day a value sits, on the clock the chart draws. */
+function timeOfDayMs(date: Date): number {
+    return ((date.getHours() * 60 + date.getMinutes()) * 60 + date.getSeconds()) * 1000 + date.getMilliseconds();
+}
+
+/**
+ * Whether a value sits at the very start of its day rather than at a time
+ * anyone chose: a date alone, or a timed value on midnight - the nudge above
+ * included, which is not a time worth naming.
+ */
+export function isStartOfDay(date: Date): boolean {
+    return timeOfDayMs(date) <= ZONE_NUDGE_MS;
+}
+
+/**
+ * How the chart names a moment: the date alone at the start of a day, and the
+ * time of day as well for the rest. Preferred over formatDateTime wherever a
+ * task's own dates are shown, so a value shifted onto another clock is not
+ * announced as "12:00 AM" by the millisecond it was nudged by.
+ */
+export function formatMoment(date: Date): string {
+    return isStartOfDay(date) ? formatDate(date) : formatDateTime(date);
+}
+
+/**
+ * The last day a task runs into, for naming its finish. An end at midnight
+ * stops as that day begins - the bar never reaches into it - so the day it
+ * finishes on is the one before; anything else already names the day it runs
+ * into. A date alone is inclusive of its whole day and stands as written.
+ *
+ * Never before the day it starts on, so a task with no length keeps its date.
+ */
+export function lastCoveredDay(start: Date, end: Date): Date {
+    if (!hasTimeOfDay(end) || !isStartOfDay(end)) {
+        return end;
+    }
+
+    const previous = addDays(startOfDay(end), -1);
+    return previous.getTime() < startOfDay(start).getTime() ? startOfDay(start) : previous;
+}
+
 /** The date alone for a date-only value, and the time of day as well for the rest. */
 export function formatDateTime(date: Date): string {
     return hasTimeOfDay(date)
@@ -105,6 +155,54 @@ export function formatDateTime(date: Date): string {
               minute: "2-digit",
           }).format(date)
         : formatDate(date);
+}
+
+/**
+ * A date moved onto another clock by a number of minutes. Midnight means "a
+ * date alone" throughout the chart: such a value names a calendar date, which
+ * stands in every zone, so it does not move; and a value that carries a time
+ * is nudged a millisecond past midnight where it would land on it, rather than
+ * coming to read as a bare date on the other clock.
+ */
+function shiftToZone(date: Date, minutes: number): Date {
+    if (!hasTimeOfDay(date)) {
+        return date;
+    }
+
+    const shifted = new Date(date.getTime() + minutes * 60000);
+
+    return hasTimeOfDay(shifted) ? shifted : new Date(shifted.getTime() + ZONE_NUDGE_MS);
+}
+
+/**
+ * A date as the chosen clock reads it. Every date in the chart is measured and
+ * drawn with local-time methods, so UTC is shown by shifting the instant by the
+ * viewer's offset: the local clock then reads the UTC one.
+ *
+ * A date alone names a calendar date and stands in every zone, so it is left
+ * where it is. Across a daylight-saving change the two clocks disagree by the
+ * hour that moved, which the offset of the shifted value settles.
+ */
+export function toDisplayZone(date: Date, zone: TimeZoneMode): Date {
+    return zone === "utc" ? shiftToZone(date, date.getTimezoneOffset()) : date;
+}
+
+/** The instant behind a date the chart drew on the chosen clock. */
+export function fromDisplayZone(date: Date, zone: TimeZoneMode): Date {
+    return zone === "utc" ? shiftToZone(date, -date.getTimezoneOffset()) : date;
+}
+
+/** Every task read on the chosen clock; the same array when nothing moves. */
+export function toDisplayZoneTasks(tasks: GanttTask[], zone: TimeZoneMode): GanttTask[] {
+    if (zone === "local") {
+        return tasks;
+    }
+
+    return tasks.map((task) => ({
+        ...task,
+        start: toDisplayZone(task.start, zone),
+        end: toDisplayZone(task.end, zone),
+    }));
 }
 
 /**
@@ -347,18 +445,22 @@ const OVERLAP_MARGIN = 2;
  * an earlier-starting one sits a level deeper: it is painted underneath and
  * drawn taller, so it still shows above and below the bar covering it.
  *
- * Segments arrive ordered by start, as `buildRows` leaves them.
+ * The spans are the stretches the bars are drawn across, as `drawnSpans` works
+ * them out, rather than the dates behind them: what has to stack is what would
+ * otherwise be drawn over something else. So a date-only bar still holds its
+ * whole day, two timed bars only meet where their hours do, and a day shared
+ * out between two bars leaves both of them at the top level.
+ *
+ * Spans arrive ordered by start, as `buildRows` leaves the segments.
  */
-export function overlapLevels(segments: { start: Date; end: Date }[]): number[] {
+export function overlapLevels(spans: readonly DrawnSpan[]): number[] {
     const levels: number[] = [];
 
-    for (let index = 0; index < segments.length; index++) {
+    for (let index = 0; index < spans.length; index++) {
         let level = 0;
 
         for (let before = 0; before < index; before++) {
-            // Compared against the drawn extent, so a date-only end still holds
-            // its whole day while two timed segments only clash if their hours do.
-            if (exclusiveEnd(segments[before].end) > segments[index].start) {
+            if (spans[before].end > spans[index].start) {
                 level = Math.max(level, levels[before] + 1);
             }
         }
@@ -680,7 +782,8 @@ export function buildTimeline(
     extentEnd: Date,
     scale: TimeScale,
     density: Density,
-    today: Date
+    today: Date,
+    timeOfDay = true
 ): Timeline {
     const columnWidth = COLUMN_WIDTH[scale][density];
     const ticks: TimelineTick[] = [];
@@ -739,6 +842,7 @@ export function buildTimeline(
         scale,
         columnWidth,
         totalWidth: ticks.length * columnWidth,
+        timeOfDay,
     };
 }
 
@@ -848,19 +952,94 @@ export function instantToOffset(date: Date, timeline: Timeline): number {
     return dateToOffset(date, timeline) + withinDay / daysInMonth;
 }
 
-/** Pixel geometry of a bar spanning start..end inclusive. */
-export function barGeometry(start: Date, end: Date, timeline: Timeline): { left: number; width: number } {
-    // A column is a week or a month on the other scales, far too coarse to read
-    // an hour off, so only the day scale resolves the time of day. Elsewhere the
-    // bar keeps whole-day edges, which dateToOffset gives by ignoring the time.
-    if (timeline.scale !== "day") {
-        const left = dateToOffset(start, timeline);
-        // End dates are inclusive, so the bar runs to the start of the following day.
-        return { left, width: Math.max(4, dateToOffset(addDays(end, 1), timeline) - left) };
+/**
+ * The stretch one bar is drawn across, with no neighbours to give way to: its
+ * own hours where the timeline reads them, and the whole days it touches
+ * otherwise. A column stands for a week or a month on the coarser scales, far
+ * too broad to read an hour off, so only the day scale resolves the time of
+ * day, and only where the maker asked for it.
+ */
+export function drawnSpan(start: Date, end: Date, timeline: Timeline): DrawnSpan {
+    return timeline.scale === "day" && timeline.timeOfDay
+        ? { start, end: exclusiveEnd(end) }
+        : // End dates are inclusive, so the bar runs to the start of the following day.
+          { start: startOfDay(start), end: addDays(startOfDay(end), 1) };
+}
+
+/**
+ * Where each of a row's bars is drawn, in segment order.
+ *
+ * Bars filled out to whole days cover each other where two of them land on the
+ * same day. Where their hours are clear of each other there is a boundary to
+ * share the day out at: the earlier bar keeps the start it had and gives up
+ * the rest of the day at the hour the next bar starts, which takes over from
+ * there and hands on to the one after it in turn. Two bars that genuinely run
+ * at once have no such boundary, so they keep their whole days and stack.
+ *
+ * Segments arrive ordered by start, as `buildRows` leaves them.
+ */
+export function drawnSpans(segments: readonly { start: Date; end: Date }[], timeline: Timeline): DrawnSpan[] {
+    const spans = segments.map((segment) => drawnSpan(segment.start, segment.end, timeline));
+
+    // Bars already at their hours have no day left to share out, and the
+    // coarser scales have no hour to hand over at.
+    if (timeline.scale !== "day" || timeline.timeOfDay) {
+        return spans;
     }
 
-    const left = instantToOffset(start, timeline);
-    return { left, width: Math.max(8, instantToOffset(exclusiveEnd(end), timeline) - left) };
+    for (let index = 0; index + 1 < segments.length; index++) {
+        const next = segments[index + 1];
+        // Ordered by start, so a day they share is the earlier bar's last.
+        const sharesADay = spans[index].end > spans[index + 1].start;
+        const runsInto = exclusiveEnd(segments[index].end) > next.start;
+
+        if (sharesADay && !runsInto) {
+            spans[index] = { start: spans[index].start, end: next.start };
+            spans[index + 1] = { start: next.start, end: spans[index + 1].end };
+        }
+    }
+
+    return spans;
+}
+
+/**
+ * Where a clash is hatched: the blocked stretch as the chart draws it, held
+ * inside the bar it marks, so hatching over a bar that gave up the rest of its
+ * day stops where the bar does.
+ */
+export function clashSpan(clash: { start: Date; end: Date }, bar: DrawnSpan, timeline: Timeline): DrawnSpan {
+    // A clash arrives with an exclusive end, unlike the dates on a record.
+    const drawn =
+        timeline.scale === "day" && timeline.timeOfDay
+            ? clash
+            : {
+                  start: startOfDay(clash.start),
+                  end: hasTimeOfDay(clash.end) ? addDays(startOfDay(clash.end), 1) : clash.end,
+              };
+
+    return {
+        start: drawn.start > bar.start ? drawn.start : bar.start,
+        end: drawn.end < bar.end ? drawn.end : bar.end,
+    };
+}
+
+/** Pixel offsets of a drawn span, whose end is exclusive. */
+function spanOffsets(span: DrawnSpan, timeline: Timeline): { left: number; right: number } {
+    return { left: instantToOffset(span.start, timeline), right: instantToOffset(span.end, timeline) };
+}
+
+/** Pixel geometry of the stretch a bar is drawn across. */
+export function barGeometry(span: DrawnSpan, timeline: Timeline): { left: number; width: number } {
+    const { left, right } = spanOffsets(span, timeline);
+    // A day column can hold a bar of an hour or two, too little to see or to
+    // take hold of; on the coarser scales a whole day is already that narrow.
+    return { left, width: Math.max(timeline.scale === "day" ? 8 : 4, right - left) };
+}
+
+/** Pixel geometry of the hatching over a clash, which marks part of a bar. */
+export function spanGeometry(span: DrawnSpan, timeline: Timeline): { left: number; width: number } {
+    const { left, right } = spanOffsets(span, timeline);
+    return { left, width: Math.max(2, right - left) };
 }
 
 /**
@@ -925,18 +1104,6 @@ export function findClashes(
     }
 
     return clashes;
-}
-
-/** Pixel geometry of a span whose end is exclusive, e.g. a clash between a shift and leave. */
-export function spanGeometry(start: Date, end: Date, timeline: Timeline): { left: number; width: number } {
-    if (timeline.scale === "day") {
-        const left = instantToOffset(start, timeline);
-        return { left, width: Math.max(2, instantToOffset(end, timeline) - left) };
-    }
-
-    const left = dateToOffset(start, timeline);
-    const right = dateToOffset(hasTimeOfDay(end) ? addDays(startOfDay(end), 1) : end, timeline);
-    return { left, width: Math.max(2, right - left) };
 }
 
 /** Days in an average Gregorian year's month, used to scale a drag at month zoom. */

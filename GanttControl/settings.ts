@@ -1,5 +1,5 @@
 import { DisplayRule, parseDisplayRules, serializeDisplayRules, unwrapValue } from "./display";
-import { BarStyle, ColorMode, Density, TimeScale } from "./types";
+import { BarStyle, ColorMode, Density, TimeScale, TimeZoneMode } from "./types";
 
 /**
  * The two JSON settings that configure the control: `fields`, which columns
@@ -65,6 +65,11 @@ export const BUILT_IN_COLUMNS: Record<string, string> = {
 export interface OptionSettings {
     density: Density;
     timeScale: TimeScale;
+    /**
+     * Which clock dates and times are read on: the viewer's own, or UTC. Users
+     * switch it from the toolbar, so this is only what the chart opens on.
+     */
+    timeZone: TimeZoneMode;
     colorBy: ColorMode;
     /** The legend as text, JSON or shorthand, in the form parseLegend reads. */
     legend: string;
@@ -72,6 +77,13 @@ export interface OptionSettings {
     showCurrentTime: boolean;
     showProgress: boolean;
     showLegend: boolean;
+    /**
+     * Places a bar at its start and end times inside the day, rather than
+     * filling every day it touches. Only the day scale draws an hour, so the
+     * week and month scales keep whole days either way, and there a day two of
+     * a row's records land on is shared out between them whatever this says.
+     */
+    useTimeOfDay: boolean;
     groupRows: boolean;
     allowMove: boolean;
     allowResize: boolean;
@@ -117,12 +129,14 @@ export const DEFAULT_FIELDS: FieldSettings = {
 export const DEFAULT_OPTIONS: OptionSettings = {
     density: "comfortable",
     timeScale: "day",
+    timeZone: "local",
     colorBy: "status",
     legend: "",
     showToolbar: true,
     showCurrentTime: true,
     showProgress: true,
     showLegend: true,
+    useTimeOfDay: true,
     groupRows: true,
     allowMove: false,
     allowResize: false,
@@ -154,6 +168,7 @@ const BOOLEAN_OPTIONS = [
     "showCurrentTime",
     "showProgress",
     "showLegend",
+    "useTimeOfDay",
     "groupRows",
     "allowMove",
     "allowResize",
@@ -445,6 +460,12 @@ export function parseOptions(text: string | null | undefined): Parsed<OptionSett
         take(bag, "timeScale"),
         { day: "day", week: "week", month: "month" },
         DEFAULT_OPTIONS.timeScale,
+        problems
+    );
+    value.timeZone = choice(
+        take(bag, "timeZone"),
+        { local: "local", browser: "local", utc: "utc", gmt: "utc" },
+        DEFAULT_OPTIONS.timeZone,
         problems
     );
     value.colorBy = choice(

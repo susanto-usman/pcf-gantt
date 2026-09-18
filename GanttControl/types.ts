@@ -2,6 +2,9 @@ export type Density = "comfortable" | "compact";
 
 export type TimeScale = "day" | "week" | "month";
 
+/** Which clock the chart draws times on: the viewer's own, or UTC. */
+export type TimeZoneMode = "local" | "utc";
+
 /** Where a bar's colour comes from: the built-in time-based status, or a field on the record. */
 export type ColorMode = "status" | "field";
 
@@ -155,6 +158,25 @@ export interface Timeline {
     scale: TimeScale;
     columnWidth: number;
     totalWidth: number;
+    /**
+     * Whether a bar is placed at its start and end times inside the day column,
+     * rather than filling every day it touches. Only the day scale is fine
+     * enough to draw an hour, so the other scales ignore it, and there a day
+     * two of a row's bars would otherwise cover each other on is shared out
+     * between them either way - see `drawnSpans`.
+     */
+    timeOfDay: boolean;
+}
+
+/**
+ * The stretch of time a bar is drawn across, as instants, with an exclusive
+ * end. It is what the chart draws rather than what the record says: a bar
+ * filling whole days reaches the midnights around its dates, and one sharing a
+ * day hands over at the hour the next bar starts.
+ */
+export interface DrawnSpan {
+    start: Date;
+    end: Date;
 }
 
 export interface GanttChartProps {
@@ -175,6 +197,8 @@ export interface GanttChartProps {
     selectedRowId?: string;
     density: Density;
     timeScale: TimeScale;
+    /** Which clock times are drawn on. The toolbar owns it once the user picks. */
+    timeZone: TimeZoneMode;
     /** Whether bars take their colour from the time-based status or from their colour key. */
     colorMode: ColorMode;
     /** The maker's legend, as JSON or "Value = #colour" shorthand; blank leaves the colours to the control. */
@@ -183,6 +207,8 @@ export interface GanttChartProps {
     showCurrentTime: boolean;
     showProgress: boolean;
     showLegend: boolean;
+    /** Places bars at their start and end times on the day scale; off fills whole days, bar a day two records share. */
+    useTimeOfDay: boolean;
     barStyle: BarStyle;
     /** The task list's columns in order; null keeps the built-in name, dates and progress. */
     listColumns: ListColumn[] | null;

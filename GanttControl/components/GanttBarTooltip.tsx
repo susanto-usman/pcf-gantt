@@ -10,7 +10,7 @@ import * as React from "react";
 import { BarPalette } from "../colors";
 import { useGanttStyles } from "../styles";
 import { GanttTask } from "../types";
-import { diffInDays, exclusiveEnd, formatDateTime, hasTimeOfDay } from "../utils";
+import { diffInDays, exclusiveEnd, formatMoment, hasTimeOfDay, lastCoveredDay } from "../utils";
 
 export interface GanttBarTooltipContentProps {
     task: GanttTask;
@@ -53,11 +53,13 @@ export const GanttBarTooltipContent: React.FC<GanttBarTooltipContentProps> = ({
             )}
             <div className={styles.tooltipRow}>
                 <span className={styles.tooltipLabel}>Start</span>
-                <span>{formatDateTime(start)}</span>
+                <span>{formatMoment(start)}</span>
             </div>
             <div className={styles.tooltipRow}>
                 <span className={styles.tooltipLabel}>Finish</span>
-                <span>{formatDateTime(end)}</span>
+                {/* The day the task runs into, not the midnight it stops at:
+                    an end of the 31st at 12:00 AM finishes on the 30th. */}
+                <span>{formatMoment(lastCoveredDay(start, end))}</span>
             </div>
             <div className={styles.tooltipRow}>
                 <span className={styles.tooltipLabel}>Duration</span>
@@ -162,8 +164,8 @@ export function useCursorTooltip(): {
 
 /** A short "20 Apr – 24 Apr", or a single date when both ends fall on it. */
 function formatRange(start: Date, end: Date): string {
-    const startText = formatDateTime(start);
-    const endText = formatDateTime(end);
+    const startText = formatMoment(start);
+    const endText = formatMoment(lastCoveredDay(start, end));
     return startText === endText ? startText : `${startText} – ${endText}`;
 }
 

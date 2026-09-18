@@ -25,6 +25,14 @@ import { exclusiveEnd, GROUP_ROW_PREFIX, POOL_GROUP_ID, startOfDay, toLocalIso }
 
 type DatasetRecord = ComponentFramework.PropertyHelper.DataSetApi.EntityRecord;
 
+/**
+ * Records asked of the host per page. A page is spent on records, not on rows:
+ * with a row per employee over a long date range, a host default of 25 or 50
+ * can be a handful of employees, so the chart would fill its viewport a page at
+ * a time. The host caps this at what it will serve.
+ */
+const PAGE_SIZE = 500;
+
 /** A resolved field setting: the dataset column, and a property to read off its value when it is a record. */
 interface FieldRef {
     column: string;
@@ -87,6 +95,30 @@ function toText(value: unknown): string | null {
 }
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+/** A date and time written without a zone, with a space for the T tolerated. */
+const ZONELESS_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3})\d*)?)?$/;
+
+/**
+ * Whether a value is a calendar date written without a zone: a bare
+ * "2026-09-17", or the same date spelled out to a midnight nobody typed, as an
+ * export of an all-day record does. Only text is covered; a host Date is an
+ * instant the platform has already placed on a clock.
+ */
+function isZonelessDate(value: unknown): boolean {
+    if (typeof value !== "string") {
+        return false;
+    }
+
+    const text = value.trim();
+
+    if (DATE_ONLY.test(text)) {
+        return true;
+    }
+
+    const parts = ZONELESS_DATE_TIME.exec(text);
+
+    return parts !== null && Number(parts[4]) + Number(parts[5]) + Number(parts[6] ?? 0) + Number(parts[7] ?? 0) === 0;
+}
 
 /** Records the settings panel reads to find the properties on lookup columns. */
 const SAMPLED_RECORDS = 25;
@@ -189,6 +221,8 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
     private changeStamp = 0;
     /** Columns already asked of the host with addColumn, so each is asked for once. */
     private requestedColumns = new Set<string>();
+    /** Whether the page size has been asked for, which only needs doing once. */
+    private pageSizeSet = false;
 
     public init(context: ComponentFramework.Context<IInputs>, notifyOutputChanged: () => void): void {
         this.notifyOutputChanged = notifyOutputChanged;
@@ -201,6 +235,7 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
         this.context = context;
         this.dataset = context.parameters.tasks;
         this.updateCount += 1;
+        this.applyPageSize(this.dataset);
 
         // fluentDesignLanguage carries the host's live theme (light, dark or
         // high contrast); webLightTheme is only the standalone-harness fallback.
@@ -261,10 +296,12 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             selectedRowId: this.selectedRowId,
             density: options.value.density,
             timeScale: options.value.timeScale,
+            timeZone: options.value.timeZone,
             colorMode: options.value.colorBy,
             colorLegend: options.value.legend,
             showToolbar: options.value.showToolbar,
             showCurrentTime: options.value.showCurrentTime,
+            useTimeOfDay: options.value.useTimeOfDay,
             showProgress: options.value.showProgress,
             showLegend: options.value.showLegend,
             showSettings: options.value.showSettings,
@@ -284,6 +321,27 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             end: this.readBoundary(context.parameters.end),
         };
     };
+
+    /**
+     * Asks the host for larger pages, once. The page already loaded keeps the
+     * size it was fetched with - a refresh to re-fetch it would cost a query
+     * for records the chart already has - so this is for every page after it.
+     */
+    private applyPageSize(dataset: ComponentFramework.PropertyTypes.DataSet): void {
+        if (this.pageSizeSet) {
+            return;
+        }
+
+        this.pageSizeSet = true;
+
+        // Not every host implements it, and a host that does may still refuse
+        // the number; neither is worth failing an update over.
+        try {
+            dataset.paging?.setPageSize?.(PAGE_SIZE);
+        } catch {
+            /* The host's own page size stands. */
+        }
+    }
 
     /** The chart resolves what a click selects; the control only publishes it. */
     private readonly handleSelect = (taskId: string | undefined): void => {
@@ -418,6 +476,10 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
         const titleField = field(fields.task.label);
         const startField = field(fields.start);
         const endField = field(fields.end);
+        // Whether the boundary columns hold dates alone, which readDate reads
+        // differently from an instant.
+        const startIsDate = this.isDateOnlyColumn(dataset, startField);
+        const endIsDate = this.isDateOnlyColumn(dataset, endField);
         const progressField = field(fields.progress);
         const parentField = field(fields.parent);
         const categoryField = field(fields.category);
@@ -467,8 +529,12 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
                 continue;
             }
 
-            const start = this.readDate(record, startField);
-            const end = this.readDate(record, endField);
+            // Read as a pair: a zoneless midnight means a whole day only when
+            // its partner is one too. See readDate.
+            const wholeDays =
+                isZonelessDate(this.readValue(record, startField)) && isZonelessDate(this.readValue(record, endField));
+            const start = this.readDate(record, startField, startIsDate, wholeDays);
+            const end = this.readDate(record, endField, endIsDate, wholeDays);
 
             // A task without both endpoints cannot be placed on the timeline.
             if (!start || !end) {
@@ -988,15 +1054,46 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
         return toText(record.getValue(field.column));
     }
 
-    private readDate(record: DatasetRecord, field: FieldRef): Date | null {
-        return this.parseDate(this.readValue(record, field));
+    private readDate(record: DatasetRecord, field: FieldRef, dateOnly = false, wholeDays = false): Date | null {
+        const value = this.readValue(record, field);
+
+        // A date-only column carries no time of day to convert. Its value
+        // reaches us at midnight UTC and stands for that calendar date in every
+        // timezone, where an instant would slip to the day before west of UTC.
+        if (dateOnly && value instanceof Date) {
+            return new Date(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate());
+        }
+
+        return this.parseDate(value, wholeDays);
+    }
+
+    /**
+     * True when the column behind a field holds a date without a time, as a
+     * Dataverse Date Only column does. A property read off a record value has no
+     * column of its own, so it is taken as written.
+     */
+    private isDateOnlyColumn(dataset: ComponentFramework.PropertyTypes.DataSet, field: FieldRef): boolean {
+        if (!field.column || field.property) {
+            return false;
+        }
+
+        const dataType = (dataset.columns ?? []).find(
+            (column) => column.name.toLowerCase() === field.column.toLowerCase()
+        )?.dataType;
+
+        return dataType === "DateAndTime.DateOnly" || dataType === "DateOnly";
     }
 
     /**
      * A date read from a host value, which reaches us as a Date from a Dataverse
      * column or as text from a maker-typed property. Null when blank or unparsable.
+     *
+     * Every value is an instant, drawn in the viewer's timezone. Text without a
+     * zone is read as UTC, which is how the columns behind it are stored: read
+     * as local, a UTC start would keep its written time while a UTC end came
+     * back shifted, and the bar between them would run hours too long.
      */
-    private parseDate(value: unknown): Date | null {
+    private parseDate(value: unknown, wholeDays = false): Date | null {
         if (value === null || value === undefined) {
             return null;
         }
@@ -1010,30 +1107,53 @@ export class GanttControl implements ComponentFramework.ReactControl<IInputs, IO
             return null;
         }
 
-        // A date-only string ("2024-01-01") parses as UTC midnight, which is the
-        // previous local day west of UTC, so read it as a local date instead.
-        const dateOnly = typeof text === "string" ? DATE_ONLY.exec(text) : null;
-        const date =
-            text instanceof Date
-                ? new Date(text)
-                : dateOnly
-                  ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
-                  : new Date(text as string | number);
-
-        if (Number.isNaN(date.getTime())) {
-            return null;
+        if (typeof text !== "string") {
+            const instant = text instanceof Date ? new Date(text.getTime()) : new Date(text as number);
+            return Number.isNaN(instant.getTime()) ? null : instant;
         }
 
-        // A date-only column reaches us at UTC midnight, which is the previous
-        // local day west of UTC, so it is read back as that calendar date. Every
-        // other value keeps its time of day for the day scale to draw. The cost
-        // is that a real midnight-UTC appointment is taken for a date, the only
-        // reading that also keeps date-only columns on their own day.
-        if (date.getUTCHours() + date.getUTCMinutes() + date.getUTCSeconds() + date.getUTCMilliseconds() === 0) {
-            return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+        // A date-only string names a calendar date and carries no time to
+        // convert, so it stays on that date in any timezone. Read as UTC
+        // midnight it would be the day before west of UTC.
+        const dateOnly = DATE_ONLY.exec(text);
+
+        if (dateOnly) {
+            return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
         }
 
-        return date;
+        const zoneless = ZONELESS_DATE_TIME.exec(text);
+
+        // A pair of zoneless midnights is an all-day record written out in
+        // full - "2026-09-17T00:00:00" to "2026-09-17T00:00:00" is one day off
+        // sick, not an instant - so it names calendar dates the way a bare
+        // "2026-09-17" does. Read as UTC it would arrive hours into the day
+        // east of UTC, which the chart draws and reads as a timed value: a bar
+        // starting at 8am and a finish that is also its start.
+        //
+        // Only as a pair. Alone, a midnight is just as likely to be the start
+        // of a shift that ends at "2026-09-17T08:30", and reading the two ends
+        // on different clocks would stretch the bar by the offset.
+        if (zoneless && wholeDays) {
+            return new Date(Number(zoneless[1]), Number(zoneless[2]) - 1, Number(zoneless[3]));
+        }
+
+        const date = zoneless
+            ? new Date(
+                  Date.UTC(
+                      Number(zoneless[1]),
+                      Number(zoneless[2]) - 1,
+                      Number(zoneless[3]),
+                      Number(zoneless[4]),
+                      Number(zoneless[5]),
+                      Number(zoneless[6] ?? 0),
+                      Number((zoneless[7] ?? "").padEnd(3, "0"))
+                  )
+              )
+            : // Anything else carries its own zone, or is a format only the host
+              // knows, and is left to the platform to parse.
+              new Date(text);
+
+        return Number.isNaN(date.getTime()) ? null : date;
     }
 
     /**

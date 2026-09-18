@@ -19,6 +19,8 @@ interface MockOptions {
     /** The Options property, likewise. */
     options?: Record<string, unknown>;
     formatted?: Record<string, Record<string, string>>;
+    /** Column data types, as the host reports them, e.g. { startDate: "DateAndTime.DateOnly" }. */
+    dataTypes?: Record<string, string>;
     links?: { to: string; alias: string }[];
     loading?: boolean;
     hasNextPage?: boolean;
@@ -41,9 +43,9 @@ function mockContext(options: MockOptions) {
     const dataset = {
         sortedRecordIds: ids,
         records,
-        columns: columns.map((name) => ({ name })),
+        columns: columns.map((name) => ({ name, dataType: options.dataTypes?.[name] })),
         loading: options.loading ?? false,
-        paging: { hasNextPage: options.hasNextPage ?? false, loadNextPage: vi.fn() },
+        paging: { hasNextPage: options.hasNextPage ?? false, loadNextPage: vi.fn(), setPageSize: vi.fn() },
         linking: { getLinkedEntities: () => options.links ?? [] },
         setSelectedRecordIds: vi.fn(),
         openDatasetItem: vi.fn(),
@@ -106,7 +108,7 @@ describe("GanttControl", () => {
                 {
                     id: "1",
                     title: "Design",
-                    startDate: "2024-01-01T10:30:00",
+                    startDate: "2024-01-01T10:30:00Z",
                     endDate: new Date(2024, 0, 5, 17, 30),
                     progress: "42.6",
                     parentId: null,
@@ -118,7 +120,7 @@ describe("GanttControl", () => {
             {
                 id: "1",
                 title: "Design",
-                start: new Date(2024, 0, 1, 10, 30),
+                start: new Date(Date.UTC(2024, 0, 1, 10, 30)),
                 end: new Date(2024, 0, 5, 17, 30),
                 progress: 43,
                 parentId: null,
@@ -144,7 +146,54 @@ describe("GanttControl", () => {
         expect(props.tasks[0].end).toEqual(d(2024, 12, 31));
     });
 
-    it("reads a midnight-UTC value as that calendar day rather than shifting it", () => {
+    it("reads text with a time but no zone as UTC, so a shift keeps its length", () => {
+        const { props } = render({
+            rows: [{ id: "1", title: "Day shift", startDate: "2024-04-01T00:00:00", endDate: "2024-04-01 08:30" }],
+        });
+
+        // The pair used to split: a midnight start was taken for a calendar date
+        // while the end was converted, which drew a shift hours too long.
+        expect(props.tasks[0].start).toEqual(new Date(Date.UTC(2024, 3, 1)));
+        expect(props.tasks[0].end).toEqual(new Date(Date.UTC(2024, 3, 1, 8, 30)));
+    });
+
+    it("reads a pair of zoneless midnights as whole calendar days", () => {
+        const { props } = render({
+            rows: [{ id: "1", title: "Sick leave", startDate: "2026-09-17T00:00:00", endDate: "2026-09-17T00:00:00" }],
+        });
+
+        // Read as UTC the pair landed hours into the day east of UTC, where a
+        // one-day absence drew as a sliver and read as "0 mins".
+        expect(props.tasks[0].start).toEqual(d(2026, 9, 17));
+        expect(props.tasks[0].end).toEqual(d(2026, 9, 17));
+    });
+
+    it("keeps a zoneless midnight an instant when its partner carries a time", () => {
+        const { props } = render({
+            rows: [{ id: "1", title: "Night shift", startDate: "2026-09-17T00:00:00", endDate: "2026-09-17T08:30" }],
+        });
+
+        expect(props.tasks[0].start).toEqual(new Date(Date.UTC(2026, 8, 17)));
+        expect(props.tasks[0].end).toEqual(new Date(Date.UTC(2026, 8, 17, 8, 30)));
+    });
+
+    it("keeps a host Date as the instant it is, midnight UTC included", () => {
+        const { props } = render({
+            rows: [
+                {
+                    id: "1",
+                    title: "T",
+                    startDate: new Date(Date.UTC(2024, 0, 1)),
+                    endDate: new Date(Date.UTC(2024, 0, 1, 8, 30)),
+                },
+            ],
+        });
+
+        expect(props.tasks[0].start).toEqual(new Date(Date.UTC(2024, 0, 1)));
+        expect(props.tasks[0].end).toEqual(new Date(Date.UTC(2024, 0, 1, 8, 30)));
+    });
+
+    it("reads a date-only column as that calendar date, not as midnight UTC", () => {
         const { props } = render({
             rows: [
                 {
@@ -154,6 +203,7 @@ describe("GanttControl", () => {
                     endDate: new Date(Date.UTC(2024, 0, 2)),
                 },
             ],
+            dataTypes: { startDate: "DateAndTime.DateOnly", endDate: "DateAndTime.DateOnly" },
         });
 
         expect(props.tasks[0].start).toEqual(d(2024, 1, 1));
@@ -165,7 +215,7 @@ describe("GanttControl", () => {
             rows: [{ id: "1", title: "T", startDate: "2024-01-01T09:00:00", endDate: "2024-01-01" }],
         });
 
-        expect(props.tasks[0].start).toEqual(new Date(2024, 0, 1, 9));
+        expect(props.tasks[0].start).toEqual(new Date(Date.UTC(2024, 0, 1, 9)));
         // Not clamped back to the start: the bar still runs to the end of the day.
         expect(props.tasks[0].end).toEqual(d(2024, 1, 1));
     });
@@ -320,9 +370,17 @@ describe("GanttControl", () => {
             showToolbar: false,
             showCurrentTime: true,
             showProgress: true,
+            useTimeOfDay: true,
             width: 800,
             height: 0,
         });
+    });
+
+    it("passes the time-of-day option through to the chart", () => {
+        const { props } = render({ rows: [], options: { useTimeOfDay: false } });
+
+        expect(props.settingProblems).toEqual([]);
+        expect(props.useTimeOfDay).toBe(false);
     });
 
     it("publishes the selection to the dataset and outputs", () => {
@@ -637,6 +695,18 @@ describe("GanttControl", () => {
         expect(busy.dataset.paging.loadNextPage).not.toHaveBeenCalled();
     });
 
+    it("asks the host for a larger page, once", () => {
+        const control = new GanttControl();
+        const { context, dataset } = mockContext({ rows: [] });
+
+        control.init(context, vi.fn());
+        renderAgain(control, context);
+        renderAgain(control, context);
+
+        expect(dataset.paging.setPageSize).toHaveBeenCalledTimes(1);
+        expect(dataset.paging.setPageSize).toHaveBeenCalledWith(500);
+    });
+
     it("keeps existing records while the next page loads", () => {
         const { props } = render({
             rows: [{ id: "1", title: "T", startDate: "2024-01-01", endDate: "2024-01-01" }],
@@ -661,7 +731,10 @@ describe("timeline boundaries", () => {
     it("trims the value and drops any time of day", () => {
         const { props } = render({ rows: [row], settings: { start: " 2024-01-04T15:45:00 " } });
 
-        expect(props.start).toBe(d(2024, 1, 4).getTime());
+        // Typed with a time it is a UTC instant, so the day it falls on is the
+        // viewer's, not the one written.
+        const instant = new Date(Date.UTC(2024, 0, 4, 15, 45));
+        expect(props.start).toBe(d(instant.getFullYear(), instant.getMonth() + 1, instant.getDate()).getTime());
     });
 
     it("leaves the boundary open when blank or unparsable", () => {

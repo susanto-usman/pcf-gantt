@@ -3,7 +3,7 @@ import * as React from "react";
 import { BarPalette, textOnFill } from "../colors";
 import { cssVars, useGanttStyles } from "../styles";
 import { BarStyle, DragMode, EditPermissions, GanttTask, TaskEdit } from "../types";
-import { applyDrag, clampDragDays, formatDateTime } from "../utils";
+import { applyDrag, clampDragDays, formatMoment, lastCoveredDay } from "../utils";
 import { GanttBarTooltipContent, useCursorTooltip } from "./GanttBarTooltip";
 
 /** Below this a bar has no room for two grips without covering itself. */
@@ -229,7 +229,7 @@ export const GanttBar: React.FC<GanttBarProps> = ({
         }
     };
 
-    const spokenRange = `${formatDateTime(shownStart)} to ${formatDateTime(shownEnd)}`;
+    const spokenRange = `${formatMoment(shownStart)} to ${formatMoment(lastCoveredDay(shownStart, shownEnd))}`;
 
     const shared = {
         role: "button" as const,

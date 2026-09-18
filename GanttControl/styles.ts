@@ -811,6 +811,21 @@ export const useGanttStyles = makeStyles({
         ...typographyStyles.caption1,
         color: tokens.colorNeutralForeground3,
     },
+    /** Sits under the last row so a page being fetched is visible where the user is scrolling. */
+    loadingMoreRow: {
+        display: "flex",
+        alignItems: "center",
+        // Sticky against the horizontal scroll so it stays in view when the
+        // timeline is scrolled sideways, rather than sitting off to the right.
+        position: "sticky",
+        insetInlineStart: 0,
+        width: "fit-content",
+        columnGap: tokens.spacingHorizontalS,
+        paddingBlock: tokens.spacingVerticalS,
+        paddingInline: tokens.spacingHorizontalM,
+        color: tokens.colorNeutralForeground3,
+        ...typographyStyles.caption1,
+    },
     legend: {
         display: "flex",
         alignItems: "center",

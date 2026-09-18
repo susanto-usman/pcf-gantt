@@ -95,6 +95,22 @@ matching related column in the view; otherwise the property read off the lookup 
 is read, so flatten deeper paths in the app first. To show another related column in a model-driven app, add
 it to the view.
 
+**How dates are read.** A date-and-time column arrives as an instant and is drawn in the viewer's
+timezone. Text with no zone on it (`2026-09-20T09:00:00`) is read as UTC, the way Dataverse stores
+such a value: read as local it would be pulled away from the column values around it, and a shift
+stored 00:00–08:30 would draw hours too long. Text carrying a zone (`...Z`, `...+08:00`) is honoured as
+written. A value with no time of day at all — a Dataverse **Date Only** column, or text such as
+`2026-09-20` — names a calendar date rather than an instant, so it stays on that date in every
+timezone. Zoneless text spelled out to midnight at both ends (`2026-09-17T00:00:00` to
+`2026-09-17T00:00:00`) is an all-day record written out in full, and is read the same way; a midnight
+whose partner carries a time of day (`00:00:00` to `08:30`) is still an instant, so the shift keeps
+its length.
+
+**Where a task finishes.** An end carrying a time of day is the instant the task stops, so an end of
+the 31st at midnight finishes on the 30th — that is the date the tooltip and the **Finish** column
+name, rather than a midnight the bar never reaches. An end with no time of day is inclusive of its
+whole day and stands as written.
+
 A mapping you set that matches no column is named in a warning bar, along with the columns the dataset does
 have.
 
@@ -104,12 +120,14 @@ have.
 | ----------------- | ------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `density`         | `comfortable` | Initial density: `comfortable` (Detailed) or `compact`.                                                              |
 | `timeScale`       | `day`         | Initial zoom: `day`, `week` or `month`.                                                                              |
+| `timeZone`        | `local`       | Which clock times are read on to start with: `local` or `utc`.                                                       |
 | `colorBy`         | `status`      | `status` for the built-in time-based scheme, or `field` to colour by `fields.color`.                                 |
 | `legend`          | —             | Your own colours and legend labels. See [Colours and the legend](#colours-and-the-legend).                           |
 | `showToolbar`     | `true`        | The toolbar with search, filter chips, zoom and density.                                                             |
 | `showCurrentTime` | `true`        | The marker for the current time.                                                                                     |
 | `showProgress`    | `true`        | Progress fills on bars and the progress column.                                                                      |
 | `showLegend`      | `true`        | The legend along the bottom.                                                                                         |
+| `useTimeOfDay`    | `true`        | Places each bar at its start and end times inside the day. Off fills every day a record touches.                     |
 | `groupRows`       | `true`        | Merges records sharing a `fields.row` value onto one row. Off gives every record its own row.                        |
 | `allowMove`       | `false`       | Lets a user drag a bar along the timeline. See [Editing](#editing).                                                  |
 | `allowResize`     | `false`       | Lets a user drag either end of a bar.                                                                                |
@@ -120,7 +138,30 @@ have.
 | `display`         | —             | Rules for drawing records as icons, tints, the unallocated pool, or not at all. See [Display rules](#display-rules). |
 | `poolTitle`       | `Unallocated` | Heading for the unallocated pool.                                                                                    |
 
-Density and time scale are only where the chart starts: the toolbar changes them after that.
+Density, time scale and time zone are only where the chart starts: the toolbar changes them after that.
+
+#### Local time and UTC
+
+Dataverse stores a Date and Time column as an instant, and the chart draws it on the viewer's own clock — so a
+shift saved as 01:00 UTC reads as 09:00 in Perth. The globe button in the toolbar switches the whole chart
+between that clock and UTC: the bars, the ticks, the tooltips, the today column and the current-time marker all
+move together, so a roster spread across sites can be read in one shared clock. Nothing is written back
+differently — a bar dragged while UTC is shown still publishes the instant the user left it at.
+
+A Date Only column names a calendar date rather than an instant, and a date stands in every zone, so records on
+date-only columns sit where they are on both clocks.
+
+Only the day scale is fine enough to read an hour off a column, so `useTimeOfDay` changes nothing at week or month
+zoom: there a bar always spans the whole days it touches. Turn it off where the times on a record say something
+other than when the work runs, e.g. a leave record stamped at the moment it was approved, which would otherwise
+start its bar partway through the day.
+
+A day two of a row's records land on is the exception, since filled out to whole days those bars would cover each
+other. Where their hours are clear of each other the day is shared out instead: the earlier bar keeps the start it
+had and gives up the rest of the day at the hour the next record starts, which runs from there to the end of the
+day or to the record after it in turn. So a morning shift handed over at 13:00 fills the day up to 13:00, and the
+afternoon shift fills the rest of it. Records whose hours genuinely overlap have no hour to hand over at, so they
+keep their whole days and stack as before, and a day with one record on the row still fills.
 
 #### The settings panel
 
@@ -231,8 +272,8 @@ no rule matches is a plain bar, so a new or misspelt value shows up looking wron
 | `{ "value": 2 }`                   | The raw value: a choice column's number, which survives its label being renamed or translated, or a lookup's id. |
 | `{ "not": ... }`                   | Anything the condition inside does not.                                                                          |
 
-`icon` names a built-in icon (plane, flight-in, flight-out, home, sick, training, car, clock, lock, star, check, cross, warning, flag,
-person, calendar, dot); anything else is drawn as short text. `color` sets the icon, tint or bar colour.
+`icon` names a built-in icon (plane, flight-in, flight-out, helicopter, helicopter-in, helicopter-out, home, sick, training, car,
+bus, clock, lock, star, check, cross, warning, flag, person, calendar, dot); anything else is drawn as short text. `color` sets the icon, tint or bar colour.
 `blocks: true` marks unavailable time: a bar on the same row overlapping it is hatched, and the row gets a
 warning flag.
 

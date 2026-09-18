@@ -10,13 +10,20 @@ import {
     buildTimeline,
     clampDragDays,
     collectParentIds,
+    clashSpan,
     dateToOffset,
     diffInDays,
+    drawnSpan,
+    drawnSpans,
+    fromDisplayZone,
     getTaskExtent,
     getTaskStatus,
     instantToOffset,
+    formatMoment,
     isSameDay,
+    isStartOfDay,
     isWeekend,
+    lastCoveredDay,
     offsetToDays,
     overlapHeight,
     overlapLevels,
@@ -24,8 +31,12 @@ import {
     pixelsPerDay,
     selectRow,
     selectTask,
+    spanGeometry,
+    startOfDay,
     startOfMonth,
     startOfWeek,
+    toDisplayZone,
+    toDisplayZoneTasks,
     toLocalIso,
 } from "../utils";
 
@@ -79,6 +90,42 @@ describe("date helpers", () => {
         expect(isWeekend(d(2024, 1, 6))).toBe(true); // Saturday
         expect(isWeekend(d(2024, 1, 7))).toBe(true); // Sunday
         expect(isWeekend(d(2024, 1, 8))).toBe(false);
+    });
+});
+
+describe("naming a finish", () => {
+    /** Midnight on the drawn clock, nudged as a value shifted into UTC is. */
+    const nudged = (year: number, month: number, day: number) => new Date(d(year, month, day).getTime() + 1);
+
+    it("reads a nudged midnight as the start of its day, not as a time", () => {
+        expect(isStartOfDay(d(2024, 3, 30))).toBe(true);
+        expect(isStartOfDay(nudged(2024, 3, 30))).toBe(true);
+        expect(isStartOfDay(at(2024, 3, 30, 8))).toBe(false);
+
+        // The millisecond is not a time of day worth announcing.
+        expect(formatMoment(nudged(2024, 3, 30))).toBe(formatMoment(d(2024, 3, 30)));
+        expect(formatMoment(at(2024, 3, 30, 8))).toMatch(/8/);
+    });
+
+    it("names the day a task runs into, not the midnight it stops at", () => {
+        // An end of the 31st at midnight covers the 30th and no more.
+        expect(lastCoveredDay(nudged(2024, 3, 30), nudged(2024, 3, 31))).toEqual(d(2024, 3, 30));
+        expect(lastCoveredDay(d(2024, 3, 30), new Date(d(2024, 4, 1).getTime() + 1))).toEqual(d(2024, 3, 31));
+    });
+
+    it("leaves a date alone and a real time of day as they are", () => {
+        // A date alone is inclusive of its whole day, so it already names the
+        // last day covered.
+        expect(lastCoveredDay(d(2026, 9, 17), d(2026, 9, 17))).toEqual(d(2026, 9, 17));
+
+        const evening = at(2024, 3, 31, 17);
+        expect(lastCoveredDay(at(2024, 3, 30, 8), evening)).toBe(evening);
+    });
+
+    it("keeps a task with no length on the day it starts", () => {
+        const midnight = nudged(2024, 3, 30);
+
+        expect(lastCoveredDay(midnight, midnight)).toEqual(d(2024, 3, 30));
     });
 });
 
@@ -319,6 +366,7 @@ describe("selectTask and selectRow", () => {
 });
 
 describe("overlapLevels", () => {
+    /** A drawn span, whose end is the midnight it stops at rather than a day it covers. */
     const span = (start: number, end: number) => ({ start: d(2024, 1, start), end: d(2024, 1, end) });
 
     it("keeps every bar at the top level when none overlap", () => {
@@ -329,9 +377,9 @@ describe("overlapLevels", () => {
         expect(overlapLevels([span(1, 10), span(5, 12)])).toEqual([0, 1]);
     });
 
-    it("counts end dates as inclusive", () => {
-        expect(overlapLevels([span(1, 5), span(5, 8)])).toEqual([0, 1]);
-        expect(overlapLevels([span(1, 5), span(6, 8)])).toEqual([0, 0]);
+    it("lets one bar start where the one before it stops", () => {
+        expect(overlapLevels([span(1, 5), span(5, 8)])).toEqual([0, 0]);
+        expect(overlapLevels([span(1, 6), span(5, 8)])).toEqual([0, 1]);
     });
 
     it("deepens the stack for each bar overlapped", () => {
@@ -344,6 +392,98 @@ describe("overlapLevels", () => {
 
     it("stacks under a bar that is itself stacked", () => {
         expect(overlapLevels([span(1, 2), span(1, 10), span(4, 6)])).toEqual([0, 1, 2]);
+    });
+
+    it("leaves two shifts side by side when the hours they are drawn at do not meet", () => {
+        const morning = { start: at(2024, 1, 4, 9), end: at(2024, 1, 4, 12) };
+        const afternoon = { start: at(2024, 1, 4, 13), end: at(2024, 1, 4, 17) };
+
+        expect(overlapLevels([morning, afternoon])).toEqual([0, 0]);
+        // Both filled out to the same day, one goes under the other.
+        expect(overlapLevels([span(4, 5), span(4, 5)])).toEqual([0, 1]);
+    });
+});
+
+describe("drawnSpans", () => {
+    const morning = { start: at(2024, 1, 4, 9), end: at(2024, 1, 4, 12) };
+    const afternoon = { start: at(2024, 1, 4, 13), end: at(2024, 1, 4, 17) };
+    const evening = { start: at(2024, 1, 4, 18), end: at(2024, 1, 4, 22) };
+    const dayTimeline = (timeOfDay: boolean) =>
+        buildTimeline(d(2024, 1, 3), d(2024, 1, 10), "day", "comfortable", d(2024, 1, 1), timeOfDay);
+
+    it("gives every bar its own hours where the timeline reads them", () => {
+        expect(drawnSpans([morning, afternoon], dayTimeline(true))).toEqual([
+            { start: at(2024, 1, 4, 9), end: at(2024, 1, 4, 12) },
+            { start: at(2024, 1, 4, 13), end: at(2024, 1, 4, 17) },
+        ]);
+    });
+
+    it("fills the whole day for a bar that has it to itself", () => {
+        expect(drawnSpans([morning], dayTimeline(false))).toEqual([{ start: d(2024, 1, 4), end: d(2024, 1, 5) }]);
+    });
+
+    it("hands the rest of a shared day over at the hour the next bar starts", () => {
+        expect(drawnSpans([morning, afternoon], dayTimeline(false))).toEqual([
+            { start: d(2024, 1, 4), end: at(2024, 1, 4, 13) },
+            { start: at(2024, 1, 4, 13), end: d(2024, 1, 5) },
+        ]);
+    });
+
+    it("hands on again down a day of three, the last keeping the rest of it", () => {
+        expect(drawnSpans([morning, afternoon, evening], dayTimeline(false))).toEqual([
+            { start: d(2024, 1, 4), end: at(2024, 1, 4, 13) },
+            { start: at(2024, 1, 4, 13), end: at(2024, 1, 4, 18) },
+            { start: at(2024, 1, 4, 18), end: d(2024, 1, 5) },
+        ]);
+    });
+
+    it("keeps whole days where the hours of the two bars do meet", () => {
+        const overlapping = { start: at(2024, 1, 4, 11), end: at(2024, 1, 4, 15) };
+
+        // Nowhere to hand over at, so both fill the day and stack instead.
+        expect(drawnSpans([morning, overlapping], dayTimeline(false))).toEqual([
+            { start: d(2024, 1, 4), end: d(2024, 1, 5) },
+            { start: d(2024, 1, 4), end: d(2024, 1, 5) },
+        ]);
+    });
+
+    it("hands over on the second day of a shift that ran past midnight", () => {
+        const nightShift = { start: at(2024, 1, 4, 22), end: at(2024, 1, 5, 6) };
+        const nextMorning = { start: at(2024, 1, 5, 9), end: at(2024, 1, 5, 17) };
+
+        expect(drawnSpans([nightShift, nextMorning], dayTimeline(false))).toEqual([
+            { start: d(2024, 1, 4), end: at(2024, 1, 5, 9) },
+            { start: at(2024, 1, 5, 9), end: d(2024, 1, 6) },
+        ]);
+    });
+
+    it("leaves a run of days whole where a shift falls inside it", () => {
+        const leave = { start: d(2024, 1, 3), end: d(2024, 1, 8) };
+
+        // The leave runs on past the shift, so it keeps its days rather than
+        // being cut back to the morning the shift starts.
+        expect(drawnSpans([leave, morning], dayTimeline(false))).toEqual([
+            { start: d(2024, 1, 3), end: d(2024, 1, 9) },
+            { start: d(2024, 1, 4), end: d(2024, 1, 5) },
+        ]);
+    });
+
+    it("leaves bars on days of their own alone", () => {
+        const nextWeek = { start: at(2024, 1, 9, 9), end: at(2024, 1, 9, 17) };
+
+        expect(drawnSpans([morning, nextWeek], dayTimeline(false))).toEqual([
+            { start: d(2024, 1, 4), end: d(2024, 1, 5) },
+            { start: d(2024, 1, 9), end: d(2024, 1, 10) },
+        ]);
+    });
+
+    it("keeps whole days on the scales too coarse to draw an hour", () => {
+        const timeline = buildTimeline(d(2024, 1, 3), d(2024, 1, 10), "week", "comfortable", d(2024, 1, 1));
+
+        expect(drawnSpans([morning, afternoon], timeline)).toEqual([
+            { start: d(2024, 1, 4), end: d(2024, 1, 5) },
+            { start: d(2024, 1, 4), end: d(2024, 1, 5) },
+        ]);
     });
 });
 
@@ -432,7 +572,10 @@ describe("dateToOffset and barGeometry", () => {
         expect(dateToOffset(d(2024, 1, 1), timeline)).toBe(0);
         expect(dateToOffset(d(2024, 1, 4), timeline)).toBe(120);
         // Inclusive end: a one-day task is one column wide.
-        expect(barGeometry(d(2024, 1, 4), d(2024, 1, 4), timeline)).toEqual({ left: 120, width: 40 });
+        expect(barGeometry(drawnSpan(d(2024, 1, 4), d(2024, 1, 4), timeline), timeline)).toEqual({
+            left: 120,
+            width: 40,
+        });
     });
 
     it("interpolates within a week column", () => {
@@ -453,7 +596,7 @@ describe("dateToOffset and barGeometry", () => {
         const timeline = buildTimeline(d(2024, 1, 3), d(2024, 1, 10), "day", "comfortable", d(2024, 1, 1));
 
         // 09:00 to 17:00 on 4 Jan: three columns in, a third of a column wide.
-        const bar = barGeometry(at(2024, 1, 4, 9), at(2024, 1, 4, 17), timeline);
+        const bar = barGeometry(drawnSpan(at(2024, 1, 4, 9), at(2024, 1, 4, 17), timeline), timeline);
 
         expect(bar.left).toBe(120 + 40 * 0.375);
         expect(bar.width).toBeCloseTo(40 * (8 / 24));
@@ -462,21 +605,86 @@ describe("dateToOffset and barGeometry", () => {
     it("runs a timed start to the end of a date-only end day", () => {
         const timeline = buildTimeline(d(2024, 1, 3), d(2024, 1, 10), "day", "comfortable", d(2024, 1, 1));
 
-        expect(barGeometry(at(2024, 1, 4, 12), d(2024, 1, 4), timeline)).toEqual({ left: 140, width: 20 });
+        expect(barGeometry(drawnSpan(at(2024, 1, 4, 12), d(2024, 1, 4), timeline), timeline)).toEqual({
+            left: 140,
+            width: 20,
+        });
     });
 
     it("ignores the time of day on the coarser scales", () => {
         const timeline = buildTimeline(d(2024, 1, 1), d(2024, 12, 31), "month", "comfortable", d(2024, 1, 1));
 
-        expect(barGeometry(at(2024, 6, 1, 9), at(2024, 6, 3, 17), timeline)).toEqual(
-            barGeometry(d(2024, 6, 1), d(2024, 6, 3), timeline)
+        expect(barGeometry(drawnSpan(at(2024, 6, 1, 9), at(2024, 6, 3, 17), timeline), timeline)).toEqual(
+            barGeometry(drawnSpan(d(2024, 6, 1), d(2024, 6, 3), timeline), timeline)
         );
+    });
+
+    it("fills the whole days a timed bar touches when the timeline ignores the time of day", () => {
+        const timeline = buildTimeline(d(2024, 1, 3), d(2024, 1, 10), "day", "comfortable", d(2024, 1, 1), false);
+
+        // 09:00 on 4 Jan to 17:00 on 5 Jan: both days in full, as date-only values would draw.
+        expect(barGeometry(drawnSpan(at(2024, 1, 4, 9), at(2024, 1, 5, 17), timeline), timeline)).toEqual({
+            left: 120,
+            width: 80,
+        });
+        expect(barGeometry(drawnSpan(at(2024, 1, 4, 9), at(2024, 1, 4, 17), timeline), timeline)).toEqual(
+            barGeometry(drawnSpan(d(2024, 1, 4), d(2024, 1, 4), timeline), timeline)
+        );
+    });
+
+    it("draws the part of a day a bar was left with after handing the rest on", () => {
+        const timeline = buildTimeline(d(2024, 1, 3), d(2024, 1, 10), "day", "comfortable", d(2024, 1, 1), false);
+        const [morning, afternoon] = drawnSpans(
+            [
+                { start: at(2024, 1, 4, 9), end: at(2024, 1, 4, 12) },
+                { start: at(2024, 1, 4, 13), end: at(2024, 1, 4, 17) },
+            ],
+            timeline
+        );
+
+        // The day column starts at 120 and is 40 wide; the handover is at 13:00.
+        expect(barGeometry(morning, timeline).left).toBe(120);
+        expect(barGeometry(morning, timeline).width).toBeCloseTo(40 * (13 / 24));
+        expect(barGeometry(afternoon, timeline).left).toBeCloseTo(120 + 40 * (13 / 24));
+        expect(barGeometry(afternoon, timeline).width).toBeCloseTo(40 * (11 / 24));
     });
 
     it("keeps very short bars visible", () => {
         const timeline = buildTimeline(d(2024, 1, 1), d(2024, 12, 31), "month", "compact", d(2024, 1, 1));
 
-        expect(barGeometry(d(2024, 6, 1), d(2024, 6, 1), timeline).width).toBe(4);
+        expect(barGeometry(drawnSpan(d(2024, 6, 1), d(2024, 6, 1), timeline), timeline).width).toBe(4);
+    });
+});
+
+describe("clashSpan and spanGeometry", () => {
+    const clash = { start: at(2024, 1, 4, 6), end: at(2024, 1, 4, 18) };
+
+    it("places a clash at its times of day", () => {
+        const timeline = buildTimeline(d(2024, 1, 3), d(2024, 1, 10), "day", "comfortable", d(2024, 1, 1));
+        const bar = drawnSpan(at(2024, 1, 4, 6), at(2024, 1, 4, 18), timeline);
+
+        expect(spanGeometry(clashSpan(clash, bar, timeline), timeline)).toEqual({ left: 130, width: 20 });
+    });
+
+    it("spans whole days when the timeline ignores the time of day", () => {
+        const timeline = buildTimeline(d(2024, 1, 3), d(2024, 1, 10), "day", "comfortable", d(2024, 1, 1), false);
+        const bar = drawnSpan(at(2024, 1, 4, 6), at(2024, 1, 4, 18), timeline);
+
+        // The exclusive end still runs to the end of the day it falls in.
+        expect(spanGeometry(clashSpan(clash, bar, timeline), timeline)).toEqual({ left: 120, width: 40 });
+    });
+
+    it("stops where a bar that handed the rest of its day on stops", () => {
+        const timeline = buildTimeline(d(2024, 1, 3), d(2024, 1, 10), "day", "comfortable", d(2024, 1, 1), false);
+        const [morning] = drawnSpans(
+            [
+                { start: at(2024, 1, 4, 6), end: at(2024, 1, 4, 12) },
+                { start: at(2024, 1, 4, 13), end: at(2024, 1, 4, 17) },
+            ],
+            timeline
+        );
+
+        expect(clashSpan(clash, morning, timeline)).toEqual({ start: d(2024, 1, 4), end: at(2024, 1, 4, 13) });
     });
 });
 
@@ -662,5 +870,77 @@ describe("toLocalIso", () => {
         const instant = new Date(2026, 8, 20, 9, 5, 0);
 
         expect(new Date(toLocalIso(instant)).getTime()).toBe(instant.getTime());
+    });
+});
+
+describe("display zones", () => {
+    /** What the local clock reads for an instant once it is drawn in UTC. */
+    const utcParts = (instant: Date) => [
+        instant.getUTCFullYear(),
+        instant.getUTCMonth(),
+        instant.getUTCDate(),
+        instant.getUTCHours(),
+        instant.getUTCMinutes(),
+    ];
+    const localParts = (shown: Date) => [
+        shown.getFullYear(),
+        shown.getMonth(),
+        shown.getDate(),
+        shown.getHours(),
+        shown.getMinutes(),
+    ];
+
+    it("leaves every date alone on the local clock", () => {
+        const instant = at(2026, 9, 20, 9);
+
+        expect(toDisplayZone(instant, "local")).toBe(instant);
+        expect(fromDisplayZone(instant, "local")).toBe(instant);
+    });
+
+    it("reads an instant on the UTC clock", () => {
+        const instant = new Date(2026, 8, 20, 9, 30, 0);
+
+        expect(localParts(toDisplayZone(instant, "utc"))).toEqual(utcParts(instant));
+    });
+
+    it("keeps a date alone on its own day, which stands in every zone", () => {
+        const midnight = d(2026, 9, 20);
+
+        expect(toDisplayZone(midnight, "utc")).toBe(midnight);
+        expect(fromDisplayZone(midnight, "utc")).toBe(midnight);
+    });
+
+    it("keeps a time of day from reading as a date alone", () => {
+        // 9am somewhere is midnight UTC; drawn as midnight it would be taken for
+        // a bare date and fill the whole day.
+        const noon = new Date(2026, 8, 20, 12, 0, 0);
+        const midnightInUtc = new Date(noon.getTime() - (12 * 60 + noon.getTimezoneOffset()) * 60000);
+        const shown = toDisplayZone(midnightInUtc, "utc");
+
+        expect(shown.getHours()).toBe(0);
+        expect(shown.getTime() - startOfDay(shown).getTime()).toBe(1);
+    });
+
+    it("gives back the instant behind a date drawn in UTC", () => {
+        for (const instant of [
+            new Date(2026, 8, 20, 9, 30),
+            new Date(2026, 0, 2, 3, 4),
+            new Date(2026, 5, 15, 23, 45),
+        ]) {
+            const shown = toDisplayZone(instant, "utc");
+
+            expect(fromDisplayZone(shown, "utc").getTime()).toBe(instant.getTime());
+        }
+    });
+
+    it("moves both of a task's dates and leaves the rest of it alone", () => {
+        const tasks = [task({ id: "T-1", start: new Date(2026, 8, 20, 9), end: new Date(2026, 8, 20, 17) })];
+        const [shown] = toDisplayZoneTasks(tasks, "utc");
+
+        expect(toDisplayZoneTasks(tasks, "local")).toBe(tasks);
+        expect(localParts(shown.start)).toEqual(utcParts(tasks[0].start));
+        expect(localParts(shown.end)).toEqual(utcParts(tasks[0].end));
+        expect(shown.title).toBe(tasks[0].title);
+        expect(shown.end.getTime() - shown.start.getTime()).toBe(8 * 3600000);
     });
 });

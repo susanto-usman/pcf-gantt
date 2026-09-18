@@ -5,6 +5,7 @@ import { useGanttStyles } from "../styles";
 import {
     BarStyle,
     Density,
+    DrawnSpan,
     EditPermissions,
     GanttRow,
     GanttTask,
@@ -15,12 +16,16 @@ import {
 } from "../types";
 import {
     barGeometry,
+    clashSpan,
     clipGeometry,
     diffInDays,
+    drawnSpan,
+    drawnSpans,
     findClashes,
     formatWith,
     getTaskStatus,
     isMarker,
+    lastCoveredDay,
     markerDays,
     overlapHeight,
     overlapLevels,
@@ -139,21 +144,27 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
         [row.isMerged, row.segments]
     );
 
-    // Segments can overlap, which would leave the later one covering the
-    // earlier. Stack them instead: the later start goes underneath, taller, so
-    // it still shows around the bar on top of it.
-    const levels = React.useMemo(() => (row.isMerged ? overlapLevels(bars) : []), [row.isMerged, bars]);
+    // The stretch each bar is drawn across: its hours where the timeline reads
+    // them, whole days otherwise, and a day two bars would cover each other on
+    // shared out between them where their hours leave room for it.
+    const spans = React.useMemo(() => drawnSpans(bars, timeline), [bars, timeline]);
+
+    // Bars can still be drawn over one another, which would leave the later one
+    // covering the earlier. Stack them instead: the later start goes
+    // underneath, taller, so it still shows around the bar on top of it.
+    const levels = React.useMemo(() => (row.isMerged ? overlapLevels(spans) : []), [row.isMerged, spans]);
     const topOfStack = levels.length > 0 ? Math.max(...levels) : 0;
 
-    // Bars running into time the row is blocked out for, e.g. a shift over leave.
-    const clashes = React.useMemo(
-        () =>
-            findClashes(
-                bars,
-                markers.filter((marker) => marker.blocks)
-            ),
-        [bars, markers]
-    );
+    // Bars running into time the row is blocked out for, e.g. a shift over
+    // leave, hatched inside the bar each one marks so that a bar which gave up
+    // part of its day is not hatched across the whole of it.
+    const clashes = React.useMemo(() => {
+        const blockers = markers.filter((marker) => marker.blocks);
+
+        return bars.flatMap((bar, index) =>
+            findClashes([bar], blockers).map((clash) => clashSpan(clash, spans[index], timeline))
+        );
+    }, [bars, markers, spans, timeline]);
 
     // Who clashes with whom, both ways, so each tooltip can name the other side.
     const clashesOf = React.useMemo(() => {
@@ -229,11 +240,11 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
         () =>
             markers.length === 0
                 ? []
-                : bars.map((bar) => {
-                      const { left, width } = clipGeometry(barGeometry(bar.start, bar.end, timeline), timeline);
+                : spans.map((span) => {
+                      const { left, width } = clipGeometry(barGeometry(span, timeline), timeline);
                       return { left, right: left + Math.max(4, width) };
                   }),
-        [bars, markers, timeline]
+        [spans, markers, timeline]
     );
 
     const nameCell = (width?: number) => (
@@ -363,7 +374,7 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
                 case "@start":
                     return dateCell("@start", start, column.width);
                 case "@end":
-                    return dateCell("@end", end, column.width);
+                    return dateCell("@end", lastCoveredDay(start, end), column.width);
                 case "@progress":
                     return row.isGroup ? (
                         <div
@@ -421,7 +432,7 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
             {isDetailed && (
                 <>
                     {dateCell("@start", start)}
-                    {dateCell("@end", end)}
+                    {dateCell("@end", lastCoveredDay(start, end))}
                     {showProgress && progressCell()}
                 </>
             )}
@@ -488,7 +499,7 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
                 <div className={styles.trackGrid} aria-hidden="true" />
                 {markers.map(markerFor)}
                 {clashes.map((clash, index) => {
-                    const { left, width } = clipGeometry(spanGeometry(clash.start, clash.end, timeline), timeline);
+                    const { left, width } = clipGeometry(spanGeometry(clash, timeline), timeline);
                     return (
                         <div
                             key={`clash-${index}`}
@@ -506,7 +517,8 @@ const GanttTaskRowInner: React.FC<GanttTaskRowProps> = ({
                               segment.end,
                               segment.progress,
                               false,
-                              context
+                              context,
+                              spans[index]
                           );
 
                           return layout.isOutside ? null : (
@@ -578,14 +590,16 @@ function layoutFor(
     end: Date,
     progress: number,
     isSummary: boolean,
-    context: { timeline: Timeline; today: Date; colors: ColorScheme }
+    context: { timeline: Timeline; today: Date; colors: ColorScheme },
+    /** Set where the row worked the span out for itself, e.g. a day shared with the next bar. */
+    span?: DrawnSpan
 ): BarLayout & { isOutside: boolean } {
     const { timeline, today, colors } = context;
     // The status is worked out whatever the scheme: a field-coloured chart
     // still reports it nowhere, but a status-coloured one needs it, and it is
     // cheaper to compute than to branch on.
     const status = getTaskStatus(start, end, progress, today);
-    const geometry = barGeometry(start, end, timeline);
+    const geometry = barGeometry(span ?? drawnSpan(start, end, timeline), timeline);
     const clipped = clipGeometry(geometry, timeline);
 
     return {

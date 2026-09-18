@@ -59,7 +59,7 @@ import {
     toPowerFx,
 } from "../settings";
 import { useGanttStyles } from "../styles";
-import { BarStyle, ColorMode, Density, TimeScale } from "../types";
+import { BarStyle, ColorMode, Density, TimeScale, TimeZoneMode } from "../types";
 import { ChevronDownIcon, ChevronUpIcon, DismissIcon, MARKER_ICON_NAMES, MarkerIcon } from "./icons";
 
 export interface GanttSettingsPanelProps {
@@ -83,6 +83,7 @@ type PanelTab = "columns" | "display" | "options";
 const DENSITY_LABELS: Record<Density, string> = { comfortable: "Detailed", compact: "Compact" };
 const SCALE_LABELS: Record<TimeScale, string> = { day: "Day", week: "Week", month: "Month" };
 const COLOR_LABELS: Record<ColorMode, string> = { status: "Status", field: "Colour field" };
+const ZONE_LABELS: Record<TimeZoneMode, string> = { local: "Local time", utc: "UTC" };
 const BAR_STYLE_LABELS: Record<BarStyle, string> = { filled: "Filled", outlined: "Outlined" };
 const KIND_LABELS: Record<DisplayAs, string> = {
     bar: "Bar",
@@ -1052,6 +1053,16 @@ export const GanttSettingsPanel: React.FC<GanttSettingsPanelProps> = ({
                                 />
                             </Field>
                         </div>
+                        <div className={styles.settingsPair}>
+                            <Field label="Time zone" hint="Users can switch clocks from the toolbar">
+                                <Dropdown
+                                    size="small"
+                                    {...choiceProps(ZONE_LABELS, options.timeZone, (timeZone) =>
+                                        updateOptions({ timeZone })
+                                    )}
+                                />
+                            </Field>
+                        </div>
                         <LegendMapper
                             legend={options.legend}
                             colorBy={options.colorBy}
@@ -1068,6 +1079,7 @@ export const GanttSettingsPanel: React.FC<GanttSettingsPanelProps> = ({
                             {toggle("showLegend", "Legend")}
                             {toggle("showAvatars", "Row avatars")}
                             {toggle("groupRows", "Merge records sharing a row id")}
+                            {toggle("useTimeOfDay", "Bars at their start and end times")}
                         </div>
                         <div className={styles.settingsGroup} role="group" aria-label="Editing">
                             <span className={styles.settingsGroupLabel}>Editing</span>

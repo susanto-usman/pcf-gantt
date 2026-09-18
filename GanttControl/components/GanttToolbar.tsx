@@ -15,7 +15,7 @@ import {
 } from "@fluentui/react-components";
 import * as React from "react";
 import { useGanttStyles } from "../styles";
-import { Density, TimeScale } from "../types";
+import { Density, TimeScale, TimeZoneMode } from "../types";
 import {
     CalendarTodayIcon,
     ChevronDownIcon,
@@ -23,6 +23,7 @@ import {
     ChevronUpIcon,
     DensityIcon,
     FitToWidthIcon,
+    GlobeIcon,
     SearchIcon,
     SettingsIcon,
     ZoomInIcon,
@@ -32,6 +33,19 @@ import {
 const SCALE_LABELS: Record<TimeScale, string> = { day: "Day", week: "Week", month: "Month" };
 const SCALE_ORDER: TimeScale[] = ["day", "week", "month"];
 const DENSITY_LABELS: Record<Density, string> = { comfortable: "Detailed", compact: "Compact" };
+const ZONE_LABELS: Record<TimeZoneMode, string> = { local: "Local", utc: "UTC" };
+
+/**
+ * The viewer's own zone as the browser names it, e.g. "Australia/Perth", so the
+ * toggle says which clock "Local" means. Blank where the browser will not say.
+ */
+const LOCAL_ZONE_NAME = ((): string => {
+    try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
+    } catch {
+        return "";
+    }
+})();
 
 /** One filter in use, shown as a removable chip. */
 export interface FilterChip {
@@ -51,6 +65,7 @@ export interface ColumnChoice {
 export interface GanttToolbarProps {
     density: Density;
     timeScale: TimeScale;
+    timeZone: TimeZoneMode;
     search: string;
     canCollapse: boolean;
     allCollapsed: boolean;
@@ -59,6 +74,7 @@ export interface GanttToolbarProps {
     onClearFilters: () => void;
     onDensityChange: (density: Density) => void;
     onTimeScaleChange: (scale: TimeScale) => void;
+    onTimeZoneChange: (zone: TimeZoneMode) => void;
     onSearchChange: (value: string) => void;
     onToggleAll: () => void;
     onScrollToToday: () => void;
@@ -73,6 +89,7 @@ export interface GanttToolbarProps {
 export const GanttToolbar: React.FC<GanttToolbarProps> = ({
     density,
     timeScale,
+    timeZone,
     search,
     canCollapse,
     allCollapsed,
@@ -81,6 +98,7 @@ export const GanttToolbar: React.FC<GanttToolbarProps> = ({
     onClearFilters,
     onDensityChange,
     onTimeScaleChange,
+    onTimeZoneChange,
     onSearchChange,
     onToggleAll,
     onScrollToToday,
@@ -91,6 +109,11 @@ export const GanttToolbar: React.FC<GanttToolbarProps> = ({
 }) => {
     const styles = useGanttStyles();
     const scaleIndex = SCALE_ORDER.indexOf(timeScale);
+    const localZone = LOCAL_ZONE_NAME ? `local time (${LOCAL_ZONE_NAME})` : "local time";
+    const zoneHint =
+        timeZone === "utc"
+            ? `Times shown in UTC. Switch to ${localZone}`
+            : `Times shown in ${localZone}. Switch to UTC`;
 
     const zoom = (delta: number) => {
         const next = SCALE_ORDER[scaleIndex + delta];
@@ -167,6 +190,16 @@ export const GanttToolbar: React.FC<GanttToolbarProps> = ({
                 <Tooltip content="Scroll to today" relationship="label">
                     <ToolbarButton appearance="subtle" icon={<CalendarTodayIcon />} onClick={onScrollToToday}>
                         Today
+                    </ToolbarButton>
+                </Tooltip>
+
+                <Tooltip content={zoneHint} relationship="label">
+                    <ToolbarButton
+                        appearance="subtle"
+                        icon={<GlobeIcon />}
+                        onClick={() => onTimeZoneChange(timeZone === "utc" ? "local" : "utc")}
+                    >
+                        {ZONE_LABELS[timeZone]}
                     </ToolbarButton>
                 </Tooltip>
 

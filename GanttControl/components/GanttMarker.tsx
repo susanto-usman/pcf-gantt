@@ -3,7 +3,7 @@ import * as React from "react";
 import { BarPalette } from "../colors";
 import { useGanttStyles } from "../styles";
 import { GanttTask, Timeline } from "../types";
-import { barGeometry, clipGeometry, dateToOffset, formatDateTime, markerDays } from "../utils";
+import { barGeometry, clipGeometry, dateToOffset, drawnSpan, formatMoment, lastCoveredDay, markerDays } from "../utils";
 import { GanttBarTooltipContent, useCursorTooltip } from "./GanttBarTooltip";
 import { MarkerIcon } from "./icons";
 
@@ -71,7 +71,7 @@ const GanttMarkerInner: React.FC<GanttMarkerProps> = ({
     const isIcon = task.kind === "icon" && Boolean(task.icon);
     const color = task.displayColor || palette.fill;
     const name = task.displayLabel || task.title;
-    const spoken = `${rowLabel ? `${rowLabel}, ` : ""}${name}. ${formatDateTime(task.start)} to ${formatDateTime(task.end)}.`;
+    const spoken = `${rowLabel ? `${rowLabel}, ` : ""}${name}. ${formatMoment(task.start)} to ${formatMoment(lastCoveredDay(task.start, task.end))}.`;
 
     const tooltip = (
         <GanttBarTooltipContent
@@ -165,7 +165,10 @@ const GanttMarkerInner: React.FC<GanttMarkerProps> = ({
     };
 
     if (timeline.scale !== "day") {
-        const { left, width } = clipGeometry(barGeometry(task.start, task.end, timeline), timeline);
+        const { left, width } = clipGeometry(
+            barGeometry(drawnSpan(task.start, task.end, timeline), timeline),
+            timeline
+        );
 
         return (
             <>

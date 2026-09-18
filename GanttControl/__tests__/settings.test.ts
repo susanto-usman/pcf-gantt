@@ -17,35 +17,23 @@ describe("manifest defaults", () => {
         return match ? match[1].replace(/&quot;/g, '"') : "";
     };
 
-    // The template a maker starts from must say exactly what a blank setting means.
-    it("fills the field mapping with every key at its default", () => {
+    // Power Apps caps a static value bound to an input property at 100 characters and
+    // rejects a longer one with pcfProperties.validationMessages.maxLength, so the
+    // template a maker starts from has to fit in that box and still mean the defaults.
+    const CAP = 100;
+
+    it("keeps the field mapping template short and at the defaults", () => {
         const text = defaultOf("fields");
 
+        expect(text.length).toBeLessThanOrEqual(CAP);
         expect(parseFields(text)).toEqual({ value: DEFAULT_FIELDS, problems: [] });
-        expect(Object.keys(JSON.parse(text))).toEqual([
-            "task",
-            "start",
-            "end",
-            "progress",
-            "parent",
-            "group",
-            "row",
-            "category",
-            "color",
-            "locked",
-            "label",
-            "quantity",
-            "subtitle",
-            "image",
-            "icon",
-        ]);
     });
 
-    it("fills the options with every key at its default", () => {
+    it("keeps the options template short and at the defaults", () => {
         const text = defaultOf("options");
 
+        expect(text.length).toBeLessThanOrEqual(CAP);
         expect(parseOptions(text)).toEqual({ value: DEFAULT_OPTIONS, problems: [] });
-        expect(Object.keys(JSON.parse(text)).sort()).toEqual(Object.keys(DEFAULT_OPTIONS).sort());
     });
 });
 
@@ -128,12 +116,14 @@ describe("parseOptions", () => {
             JSON.stringify({
                 density: "Detailed",
                 TimeScale: "WEEK",
+                TimeZone: "UTC",
                 colourBy: "field",
                 legend: "Day=#0F6CBD",
                 showToolbar: false,
                 showCurrentTime: "false",
                 showProgress: false,
                 showLegend: false,
+                UseTimeOfDay: false,
                 groupRows: false,
                 allowMove: true,
                 allowResize: "TRUE",
@@ -145,12 +135,14 @@ describe("parseOptions", () => {
         expect(value).toEqual({
             density: "comfortable",
             timeScale: "week",
+            timeZone: "utc",
             colorBy: "field",
             legend: "Day=#0F6CBD",
             showToolbar: false,
             showCurrentTime: false,
             showProgress: false,
             showLegend: false,
+            useTimeOfDay: false,
             groupRows: false,
             allowMove: true,
             allowResize: true,
@@ -160,6 +152,17 @@ describe("parseOptions", () => {
             columns: "",
             display: [],
             poolTitle: "Unallocated",
+        });
+    });
+
+    it("reads the time zone by its own name or an alias", () => {
+        expect(parseOptions('{"timeZone":"utc"}').value.timeZone).toBe("utc");
+        expect(parseOptions('{"timezone":" GMT "}').value.timeZone).toBe("utc");
+        expect(parseOptions('{"timeZone":"browser"}').value.timeZone).toBe("local");
+        expect(parseOptions('{"timeZone":""}').value.timeZone).toBe("local");
+        expect(parseOptions('{"timeZone":"Perth"}')).toEqual({
+            value: DEFAULT_OPTIONS,
+            problems: ['Options: timeZone "Perth" is not one of local, utc'],
         });
     });
 
@@ -177,7 +180,7 @@ describe("parseOptions", () => {
         expect(problems).toEqual([
             'Options: density "roomy" is not one of comfortable, compact',
             "Options: allowMove must be true or false",
-            'Options: "zoom" is not a setting. Use density, timeScale, colorBy, legend, showToolbar, showCurrentTime, showProgress, showLegend, groupRows, allowMove, allowResize, showSettings, showAvatars, barStyle, columns, display, poolTitle',
+            'Options: "zoom" is not a setting. Use density, timeScale, timeZone, colorBy, legend, showToolbar, showCurrentTime, showProgress, showLegend, useTimeOfDay, groupRows, allowMove, allowResize, showSettings, showAvatars, barStyle, columns, display, poolTitle',
         ]);
     });
 });

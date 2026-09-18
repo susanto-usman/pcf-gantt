@@ -13,7 +13,7 @@ import * as React from "react";
 import { buildColorScheme } from "../colors";
 import { cssVars, LIST_COLUMN_WIDTHS, MIN_NAME_TEXT_WIDTH, NAME_CELL_CHROME, useGanttStyles } from "../styles";
 import { normaliseText } from "../display";
-import { Density, GanttChartProps, GanttRow, GanttSelection, TaskEdit, TimeScale } from "../types";
+import { Density, GanttChartProps, GanttRow, GanttSelection, TaskEdit, TimeScale, TimeZoneMode } from "../types";
 import {
     applyPendingEdits,
     BAR_HEIGHT,
@@ -23,15 +23,17 @@ import {
     dateToOffset,
     getTaskExtent,
     getTaskStatus,
+    fromDisplayZone,
     GROUP_ROW_PREFIX,
     instantToOffset,
-    isSameDay,
     POOL_GROUP_ID,
     ROW_HEIGHT,
     rowIdOf,
     selectRow,
     selectTask,
     startOfDay,
+    toDisplayZone,
+    toDisplayZoneTasks,
 } from "../utils";
 import { EmptyReason, GanttEmptyState } from "./GanttEmptyState";
 import { GanttTaskRow, GroupSpan } from "./GanttTaskRow";
@@ -47,6 +49,14 @@ const DEFAULT_LIST_WIDTH: Record<Density, number> = { comfortable: 440, compact:
 const MAX_LIST_WIDTH = 640;
 /** Rows rendered above and below the viewport so scrolling stays smooth. */
 const OVERSCAN = 8;
+/** Rows of slack left below the viewport before the next dataset page is asked for. */
+const LOAD_MORE_ROWS = 6;
+/**
+ * Pages the chart pulls in on its own before the Load more button takes over.
+ * A filter that matches nothing in the loaded records would otherwise walk the
+ * whole table looking for rows to fill the viewport with.
+ */
+const MAX_AUTO_PAGES = 20;
 const BOUNDARY_DEBOUNCE_MS = 500;
 /**
  * How long an edit stays drawn before the chart gives up waiting for the host.
@@ -55,6 +65,13 @@ const BOUNDARY_DEBOUNCE_MS = 500;
  * where the data still says it is rather than lying indefinitely.
  */
 const PENDING_TIMEOUT_MS = 8000;
+/**
+ * How long a requested page keeps the chart marked busy before it gives up
+ * waiting. The usual settlement is the dataset coming back with more records;
+ * this is the backstop for a host that answers loadNextPage with nothing at
+ * all, so the button becomes clickable again rather than spinning forever.
+ */
+const LOAD_MORE_TIMEOUT_MS = 15000;
 /** Ten years; a longer boundary is treated as a typo rather than drawn. */
 const MAX_BOUNDARY_SPAN_MS = 3653 * 86400000;
 
@@ -96,6 +113,16 @@ function writeHiddenColumns(key: string, hidden: ReadonlySet<string>): void {
     }
 }
 
+/** Whether the rows overflow the scroll area at all, so scrolling down means something. */
+function isVerticallyScrollable(element: HTMLElement): boolean {
+    return element.scrollHeight > element.clientHeight;
+}
+
+/** Whether the last of the loaded rows is within reach of the viewport. */
+function isNearBottom(element: HTMLElement, rowHeight: number): boolean {
+    return element.scrollHeight - element.scrollTop - element.clientHeight < rowHeight * LOAD_MORE_ROWS;
+}
+
 /** Follows value, but only once it has stopped changing for delayMs. */
 function useDebouncedValue<T>(value: T, delayMs: number): T {
     const [debounced, setDebounced] = React.useState(value);
@@ -119,10 +146,12 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     selectedRowId,
     density: densityProp,
     timeScale: timeScaleProp,
+    timeZone: timeZoneProp,
     colorMode,
     colorLegend,
     showToolbar,
     showCurrentTime,
+    useTimeOfDay,
     showProgress,
     showLegend,
     barStyle,
@@ -155,6 +184,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
 
     const [density, setDensity] = React.useState<Density>(densityProp);
     const [timeScale, setTimeScale] = React.useState<TimeScale>(timeScaleProp);
+    const [timeZone, setTimeZone] = React.useState<TimeZoneMode>(timeZoneProp);
     const [search, setSearch] = React.useState("");
     const [collapsedIds, setCollapsedIds] = React.useState<ReadonlySet<string>>(() => new Set<string>());
     const [listWidth, setListWidth] = React.useState(DEFAULT_LIST_WIDTH[densityProp]);
@@ -163,9 +193,12 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     const [viewportHeight, setViewportHeight] = React.useState(height);
     // Two clocks: `now` moves the marker within the day, while `today` stays
     // day-granular so the timeline, task status and segment memos are not
-    // rebuilt on every tick.
+    // rebuilt on every tick. Both are read on the zone the chart is drawn in,
+    // so switching to UTC moves the marker and the today column with the bars.
     const [now, setNow] = React.useState(() => new Date());
-    const [today, setToday] = React.useState(() => startOfDay(new Date()));
+    const zonedNow = React.useMemo(() => toDisplayZone(now, timeZone), [now, timeZone]);
+    const todayStamp = startOfDay(zonedNow).getTime();
+    const today = React.useMemo(() => new Date(todayStamp), [todayStamp]);
 
     /**
      * The host echoes a selection back through updateView, a round trip the
@@ -269,15 +302,22 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         setPendingEdits((current) => (current.size === 0 ? current : new Map()));
     }, []);
 
+    // A drag is made against the clock on screen, so the edit is drawn as the
+    // user left it and published as the instant behind it.
     const handleEdit = React.useCallback(
         (edit: TaskEdit) => {
             setPendingEdits((current) => new Map(current).set(edit.taskId, { start: edit.start, end: edit.end }));
-            onEdit(edit);
+            onEdit({
+                ...edit,
+                start: fromDisplayZone(edit.start, timeZone),
+                end: fromDisplayZone(edit.end, timeZone),
+            });
         },
-        [onEdit]
+        [onEdit, timeZone]
     );
 
-    const liveTasks = React.useMemo(() => applyPendingEdits(tasks, pendingEdits), [tasks, pendingEdits]);
+    const zonedTasks = React.useMemo(() => toDisplayZoneTasks(tasks, timeZone), [tasks, timeZone]);
+    const liveTasks = React.useMemo(() => applyPendingEdits(zonedTasks, pendingEdits), [zonedTasks, pendingEdits]);
 
     /** The task list the pending edits were made against, to tell a save apart from a redraw. */
     const editedAgainst = React.useRef(tasks);
@@ -306,6 +346,11 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     // setting afterwards, so re-publishing a new default still takes effect.
     React.useEffect(() => setDensity(densityProp), [densityProp]);
     React.useEffect(() => setTimeScale(timeScaleProp), [timeScaleProp]);
+    React.useEffect(() => setTimeZone(timeZoneProp), [timeZoneProp]);
+
+    // Pending edits are held on the clock they were made against, so switching
+    // clocks lets them go rather than redrawing them hours out.
+    React.useEffect(() => clearPending(), [timeZone, clearPending]);
 
     // The marker advances on the hour, and the date rolls over on the tick
     // past midnight. Each timeout is measured against the clock rather than
@@ -320,10 +365,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         const msUntilNextHour =
             MS_PER_HOUR - (clock.getMinutes() * 60000 + clock.getSeconds() * 1000 + clock.getMilliseconds());
         const timeoutId = window.setTimeout(() => {
-            const current = new Date();
-
-            setNow(current);
-            setToday((previous) => (isSameDay(previous, current) ? previous : startOfDay(current)));
+            setNow(new Date());
         }, msUntilNextHour + 1000);
         return () => window.clearTimeout(timeoutId);
     }, [showCurrentTime, now]);
@@ -440,8 +482,8 @@ export const GanttChart: React.FC<GanttChartProps> = ({
             rangeEnd = extent.end.getTime();
         }
 
-        return buildTimeline(new Date(rangeStart), new Date(rangeEnd), timeScale, density, today);
-    }, [filteredTasks, timeScale, density, today, boundaryStart, boundaryEnd]);
+        return buildTimeline(new Date(rangeStart), new Date(rangeEnd), timeScale, density, today, useTimeOfDay);
+    }, [filteredTasks, timeScale, density, today, boundaryStart, boundaryEnd, useTimeOfDay]);
 
     const rowHeight = ROW_HEIGHT[density];
     const isDetailed = density === "comfortable";
@@ -563,23 +605,91 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         }
     };
 
+    /** Paging ----------------------------------------------------------- */
+
+    /**
+     * A page asked for and not yet answered. The host only re-renders the
+     * control when the dataset itself changes, so `isLoading` arrives a round
+     * trip after the click - too late to say anything about the click. This is
+     * set as the page is asked for, which is what makes the wait visible.
+     */
+    const [isLoadingMore, setIsLoadingMore] = React.useState(false);
+    const isBusy = isLoading || isLoadingMore;
+
+    const requestMore = React.useCallback(() => {
+        setIsLoadingMore(true);
+        onLoadMore();
+    }, [onLoadMore]);
+
+    /** The task list the page was asked against, to tell an answer apart from a redraw. */
+    const loadedAgainst = React.useRef(tasks);
+
+    React.useEffect(() => {
+        if (!isLoadingMore) {
+            loadedAgainst.current = tasks;
+            return undefined;
+        }
+
+        // The control hands back the same array while the records are
+        // unchanged, so a different one means the page landed. A host that has
+        // run out of pages settles it too, having nothing left to answer with.
+        if (loadedAgainst.current !== tasks || !hasNextPage) {
+            setIsLoadingMore(false);
+            return undefined;
+        }
+
+        const timeoutId = window.setTimeout(() => setIsLoadingMore(false), LOAD_MORE_TIMEOUT_MS);
+        return () => window.clearTimeout(timeoutId);
+    }, [isLoadingMore, tasks, hasNextPage]);
+
     /** Scrolling --------------------------------------------------------- */
     const handleScroll = React.useCallback(
         (event: React.UIEvent<HTMLDivElement>) => {
             const element = event.currentTarget;
             setScrollTop(element.scrollTop);
 
-            // Pull the next dataset page in as the user nears the bottom.
-            if (
-                hasNextPage &&
-                !isLoading &&
-                element.scrollHeight - element.scrollTop - element.clientHeight < rowHeight * 6
-            ) {
-                onLoadMore();
+            // Pull the next dataset page in as the user nears the bottom. Only
+            // a vertical scroll says anything about how far down the rows the
+            // user is; the same event also fires for the timeline scrolling
+            // sideways, which the effect below answers instead.
+            if (hasNextPage && !isBusy && isVerticallyScrollable(element) && isNearBottom(element, rowHeight)) {
+                requestMore();
             }
         },
-        [hasNextPage, isLoading, onLoadMore, rowHeight]
+        [hasNextPage, isBusy, requestMore, rowHeight]
     );
+
+    /**
+     * A dataset page holds records, not rows, so a first page spent on a few
+     * rows over a long date range leaves the viewport mostly empty. With
+     * nothing to scroll down there is then no scroll to pull the next page in,
+     * and the chart sits on a handful of rows until something else - the
+     * timeline scrolling sideways - happens to ask for more. So keep asking
+     * until the rows overflow the viewport or the host runs out of pages.
+     */
+    const autoPages = React.useRef(0);
+
+    React.useEffect(() => {
+        if (!scrollEl || !hasNextPage || isBusy) {
+            return;
+        }
+
+        if (isVerticallyScrollable(scrollEl)) {
+            // The rows overflow, so scrolling down reaches the bottom and the
+            // handler above takes it from there.
+            autoPages.current = 0;
+            return;
+        }
+
+        if (autoPages.current >= MAX_AUTO_PAGES) {
+            return;
+        }
+
+        autoPages.current += 1;
+        requestMore();
+        // rows.length and viewportHeight do not appear in the body, but both
+        // change what the measurements above report.
+    }, [scrollEl, hasNextPage, isBusy, requestMore, rowHeight, rows.length, viewportHeight]);
 
     React.useEffect(() => {
         if (!scrollEl) {
@@ -662,7 +772,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     const lastVisible = Math.min(rows.length, Math.ceil((scrollTop + viewportHeight) / rowHeight) + OVERSCAN);
     const visibleRows = rows.slice(firstVisible, lastVisible);
 
-    const currentTimeOffset = showCurrentTime ? instantToOffset(now, timeline) : 0;
+    const currentTimeOffset = showCurrentTime ? instantToOffset(zonedNow, timeline) : 0;
     const isTodayInRange = showCurrentTime && today >= timeline.start && today <= timeline.end;
 
     /** The pool's category filter, as a strip of buttons beside its heading. */
@@ -943,6 +1053,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         <GanttToolbar
             density={density}
             timeScale={timeScale}
+            timeZone={timeZone}
             search={search}
             canCollapse={parentIds.length > 0}
             allCollapsed={allCollapsed}
@@ -951,6 +1062,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
             onClearFilters={handleClearFilters}
             onDensityChange={setDensity}
             onTimeScaleChange={setTimeScale}
+            onTimeZoneChange={setTimeZone}
             onSearchChange={setSearch}
             onToggleAll={handleToggleAll}
             onScrollToToday={() => scrollToDate(today)}
@@ -1004,13 +1116,22 @@ export const GanttChart: React.FC<GanttChartProps> = ({
             </div>
 
             <span style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS }}>
-                {isLoading && <Spinner size="extra-tiny" aria-label="Loading more tasks" />}
+                {/* A refresh or a filter the host is answering, with no button to say so. */}
+                {isBusy && !hasNextPage && <Spinner size="extra-tiny" aria-label="Loading tasks" />}
                 <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
                     {`${rows.length} of ${tasks.length} task${tasks.length === 1 ? "" : "s"}`}
                 </Text>
-                {hasNextPage && !isLoading && (
-                    <Button appearance="subtle" size="small" onClick={onLoadMore}>
-                        Load more
+                {/* Kept in place while the page is fetched: a button that vanished
+                    on click would leave the wait looking like nothing happened. */}
+                {hasNextPage && (
+                    <Button
+                        appearance="subtle"
+                        size="small"
+                        disabled={isBusy}
+                        icon={isBusy ? <Spinner size="extra-tiny" /> : undefined}
+                        onClick={requestMore}
+                    >
+                        {isBusy ? "Loading…" : "Load more"}
                     </Button>
                 )}
                 {/* The toolbar's own button is gone with the toolbar. */}
@@ -1288,6 +1409,16 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                         <div style={{ height: `${(rows.length - lastVisible) * rowHeight}px` }} aria-hidden="true" />
                     </div>
                 </div>
+
+                {/* Under the last row, where the scroll that asked for the page -
+                    or the chart asking on its own - left the user. Outside the
+                    grid, so it is not read as a row of it. */}
+                {isBusy && rows.length > 0 && (
+                    <div className={styles.loadingMoreRow} role="status">
+                        <Spinner size="extra-tiny" />
+                        Loading more tasks…
+                    </div>
+                )}
             </div>
 
             {statusBar}
